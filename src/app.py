@@ -105,6 +105,17 @@ def build_recipe_index(recipes_df: pd.DataFrame) -> Dict[str, List[dict]]:
     return out
 
 
+@st.cache_data
+def build_item_catalog(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]) -> List[str]:
+    items = set()
+    for _, row in recipes_df.iterrows():
+        items.add(row["result"])
+        items.update(row["ingredient_list"])
+    for members in groups.values():
+        items.update(members)
+    return sorted(item for item in items if item and key(item) not in groups)
+
+
 def item_meta_for(item_name: str, metadata: Dict[str, dict]) -> dict:
     return metadata.get(
         key(item_name),
@@ -553,6 +564,112 @@ def render_inventory_table(inventory: Counter, item_label: str = "item") -> pd.D
     return pd.DataFrame(rows)
 
 
+def inventory_picker_state(catalog: List[str]) -> Dict[str, int]:
+    if "picker_inventory" not in st.session_state:
+        st.session_state["picker_inventory"] = {}
+    picker_inventory = {
+        normalize(item_name): int(qty)
+        for item_name, qty in st.session_state["picker_inventory"].items()
+        if normalize(item_name) in catalog and int(qty) > 0
+    }
+    st.session_state["picker_inventory"] = picker_inventory
+    return picker_inventory
+
+
+def render_inventory_picker(catalog: List[str]) -> Counter:
+    picker_inventory = inventory_picker_state(catalog)
+
+    top_controls = st.columns([1.5, 1, 0.8])
+    search = top_controls[0].text_input(
+        "Search ingredients",
+        placeholder="Search for Gaberries, Gravel Beetle, Bread...",
+        help="Filter the ingredient overview so you can click items instead of typing your inventory by hand.",
+    )
+    quick_add = top_controls[1].multiselect(
+        "Quick add",
+        options=catalog,
+        default=[],
+        placeholder="Pick common items",
+        help="Fast way to add a few items before adjusting quantities below.",
+    )
+    if top_controls[2].button("Clear picker", help="Remove every selected item from the click-to-add inventory builder."):
+        st.session_state["picker_inventory"] = {}
+        picker_inventory = {}
+
+    for item_name in quick_add:
+        picker_inventory.setdefault(item_name, 1)
+
+    search_key = key(search)
+    filtered_catalog = [item_name for item_name in catalog if not search_key or search_key in key(item_name)]
+
+    overview_rows = []
+    for item_name in filtered_catalog:
+        qty = int(picker_inventory.get(item_name, 0))
+        overview_rows.append({"Have it": qty > 0, "Ingredient": item_name, "Qty": qty if qty > 0 else 1})
+
+    st.markdown("**Overview of ingredients**")
+    st.caption("Click the checkbox to add an item to your inventory, then set the quantity you own.")
+
+    edited_rows = st.data_editor(
+        pd.DataFrame(overview_rows),
+        use_container_width=True,
+        hide_index=True,
+        height=360,
+        column_config={
+            "Have it": st.column_config.CheckboxColumn(
+                "Have it",
+                help="Turn this on to include the ingredient in your inventory.",
+            ),
+            "Ingredient": st.column_config.TextColumn(
+                "Ingredient",
+                disabled=True,
+            ),
+            "Qty": st.column_config.NumberColumn(
+                "Qty",
+                min_value=1,
+                step=1,
+                help="How many of this item you currently have.",
+            ),
+        },
+        key="inventory_overview_editor",
+    )
+
+    visible_items = set(filtered_catalog)
+    for _, row in edited_rows.iterrows():
+        item_name = normalize(row["Ingredient"])
+        if not item_name:
+            continue
+        if bool(row["Have it"]):
+            picker_inventory[item_name] = int(row["Qty"])
+        elif item_name in visible_items:
+            picker_inventory.pop(item_name, None)
+
+    st.session_state["picker_inventory"] = picker_inventory
+    selected_inventory = Counter(picker_inventory)
+
+    if selected_inventory:
+        st.markdown("**Selected inventory from the picker**")
+        selected_df = render_inventory_table(selected_inventory)
+        edited_selected = st.data_editor(
+            selected_df,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "item": st.column_config.TextColumn("Ingredient", disabled=True),
+                "qty": st.column_config.NumberColumn("Qty", min_value=1, step=1),
+            },
+            key="selected_inventory_editor",
+        )
+        selected_inventory = Counter(
+            {normalize(row["item"]): int(row["qty"]) for _, row in edited_selected.iterrows() if int(row["qty"]) > 0}
+        )
+        st.session_state["picker_inventory"] = dict(selected_inventory)
+    else:
+        st.info("Use the ingredient overview above to build your inventory by clicking items.")
+
+    return selected_inventory
+
+
 def build_metadata_table(metadata: Dict[str, dict]) -> pd.DataFrame:
     rows = []
     for _, meta in sorted(metadata.items(), key=lambda pair: pair[1]["item"]):
@@ -806,6 +923,7 @@ raw_groups = load_raw_groups()
 groups = sanitize_groups(recipes_df, raw_groups)
 item_metadata = load_item_metadata()
 recipe_index = build_recipe_index(recipes_df)
+item_catalog = build_item_catalog(recipes_df, groups)
 
 st.markdown(
     """
@@ -846,27 +964,37 @@ input_col, summary_col = st.columns([1.05, 1.35])
 with input_col:
     st.markdown('<div class="soft-card">', unsafe_allow_html=True)
     st.subheader("Inventory input")
-    st.caption("Add what you already own. Everything else in the app updates from this stash.")
-    uploaded = st.file_uploader(
-        "Upload CSV or Excel",
-        type=["csv", "xlsx"],
-        help="Use an inventory sheet with an item/name column and an optional qty column.",
-    )
-    raw_text = st.text_area(
-        "Or paste item,qty lines",
-        value="Wheat,8\nClean Water,4\nSalt,3\nEgg,2\nKrimp Nut,2\nPurpkin,2\nWoolshroom,4\nSugar,2\nVeaber's Egg,1",
-        height=210,
-        help="One item per line. Formats like `item,qty`, `item<TAB>qty`, or just `item` all work.",
-    )
+    st.caption("Pick what you own from the ingredient overview below. Paste/upload is still available as a smaller bulk-add option.")
+    picker_inventory = render_inventory_picker(item_catalog)
 
-    if uploaded is not None:
-        if uploaded.name.lower().endswith(".csv"):
-            uploaded_df = pd.read_csv(uploaded)
-        else:
-            uploaded_df = pd.read_excel(uploaded)
-        inventory = inventory_from_df(uploaded_df)
-    else:
-        inventory = counts_from_text(raw_text)
+    extra_inventory = Counter()
+    with st.expander("Optional: bulk add with paste or CSV / Excel"):
+        st.caption("Use this only if it is faster for you to add a lot of items at once.")
+        uploaded = st.file_uploader(
+            "Upload CSV or Excel",
+            type=["csv", "xlsx"],
+            help="Use an inventory sheet with an item/name column and an optional qty column.",
+        )
+        raw_text = st.text_area(
+            "Paste item,qty lines",
+            value="",
+            height=120,
+            placeholder="Wheat,8\nClean Water,4\nSalt,3",
+            help="Formats like `item,qty`, `item<TAB>qty`, or just `item` all work.",
+        )
+
+        if uploaded is not None:
+            if uploaded.name.lower().endswith(".csv"):
+                uploaded_df = pd.read_csv(uploaded)
+            else:
+                uploaded_df = pd.read_excel(uploaded)
+            extra_inventory.update(inventory_from_df(uploaded_df))
+
+        if raw_text.strip():
+            extra_inventory.update(counts_from_text(raw_text))
+
+    inventory = Counter(picker_inventory)
+    inventory.update(extra_inventory)
 
     inventory_df = render_inventory_table(inventory)
     st.dataframe(inventory_df, use_container_width=True, hide_index=True)
