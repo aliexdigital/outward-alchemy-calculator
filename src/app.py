@@ -609,72 +609,125 @@ def inventory_picker_state(catalog: List[str]) -> Dict[str, int]:
     return picker_inventory
 
 
+def category_ui_state(categories: List[str]) -> Dict[str, bool]:
+    if "inventory_category_open" not in st.session_state:
+        st.session_state["inventory_category_open"] = {category: True for category in categories}
+    current = st.session_state["inventory_category_open"]
+    merged = {category: bool(current.get(category, True)) for category in categories}
+    st.session_state["inventory_category_open"] = merged
+    return merged
+
+
 def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, List[str]]) -> Counter:
     picker_inventory = inventory_picker_state(catalog)
+    category_state = category_ui_state(list(catalog_by_category.keys()))
 
-    top_controls = st.columns([1.4, 1.1, 0.8])
-    search = top_controls[0].text_input(
+    search = st.text_input(
         "Search items",
         placeholder="Search for Gaberries, Gravel Beetle, Bread...",
-        help="Quick filter across the current category.",
+        help="Search across every known item, then browse the matching categories below.",
     )
-    category = top_controls[1].selectbox(
-        "Category",
+    selected_categories = st.multiselect(
+        "Categories",
         options=list(catalog_by_category.keys()),
-        help="Browse a whole category at once, like a game inventory tab.",
+        default=list(catalog_by_category.keys()),
+        help="Keep all categories on to search the full list, or narrow the view if you want.",
     )
-    if top_controls[2].button("Clear picker", help="Remove every selected item from the click-to-add inventory builder."):
+    action_cols = st.columns([1, 1, 2.2])
+    show_owned_only = action_cols[0].toggle(
+        "Owned only",
+        value=False,
+        help="Hide items you have not selected yet.",
+    )
+    if action_cols[1].button("Clear", help="Remove every selected item from the click-to-add inventory builder.", use_container_width=True):
         st.session_state["picker_inventory"] = {}
         picker_inventory = {}
 
     st.markdown("**Inventory overview**")
-    st.caption("Browse a category, then tap `+1` to add items to your stash. Use `-1` to remove them.")
+    st.caption("Search the full item list, then open only the category sections you care about. Each item keeps a small category tag.")
 
     search_key = key(search)
-    category_items = catalog_by_category.get(category, [])
-    filtered_items = [item_name for item_name in category_items if not search_key or search_key in key(item_name)]
+    active_categories = selected_categories or list(catalog_by_category.keys())
+    filtered_by_category: Dict[str, List[str]] = {}
+    for category_name in active_categories:
+        category_items = catalog_by_category.get(category_name, [])
+        matches = [
+            item_name
+            for item_name in category_items
+            if (not search_key or search_key in key(item_name)) and (not show_owned_only or picker_inventory.get(item_name, 0) > 0)
+        ]
+        if matches:
+            filtered_by_category[category_name] = matches
+    total_visible = sum(len(items) for items in filtered_by_category.values())
 
-    summary_cols = st.columns(3)
-    summary_cols[0].metric("Category items", len(category_items))
-    summary_cols[1].metric("Visible now", len(filtered_items))
+    category_action_cols = st.columns(2)
+    if category_action_cols[0].button("Expand all categories", use_container_width=True):
+        st.session_state["inventory_category_open"] = {category: True for category in category_state}
+        st.rerun()
+    if category_action_cols[1].button("Collapse all categories", use_container_width=True):
+        st.session_state["inventory_category_open"] = {category: False for category in category_state}
+        st.rerun()
+
+    summary_cols = st.columns(4)
+    summary_cols[0].metric("Categories shown", len(active_categories))
+    summary_cols[1].metric("Visible now", total_visible)
     summary_cols[2].metric("Selected total", sum(picker_inventory.values()))
+    summary_cols[3].metric("Unique selected", len(picker_inventory))
 
-    grid_cols = st.columns(4)
-    if not filtered_items:
-        st.info("No items match this search in the current category.")
-    for idx, item_name in enumerate(filtered_items):
-        qty = int(picker_inventory.get(item_name, 0))
-        meta = item_meta_for(item_name, item_metadata)
-        blurb = meta["effects"][0] if meta["effects"] else infer_item_category(item_name, item_metadata)
-        with grid_cols[idx % 4]:
-            st.markdown(
-                f"""
-                <div class="inventory-card">
-                    <div class="inventory-card-name">{item_name}</div>
-                    <div class="inventory-card-meta">{blurb}</div>
-                    <div class="inventory-card-qty">Owned: {qty}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            adjust_cols = st.columns(2)
-            if adjust_cols[0].button("+1", key=f"add_{category}_{idx}_{item_name}", use_container_width=True):
-                picker_inventory[item_name] = qty + 1
-                st.session_state["picker_inventory"] = picker_inventory
-                st.rerun()
-            if adjust_cols[1].button("-1", key=f"sub_{category}_{idx}_{item_name}", use_container_width=True):
-                if qty <= 1:
-                    picker_inventory.pop(item_name, None)
-                else:
-                    picker_inventory[item_name] = qty - 1
-                st.session_state["picker_inventory"] = picker_inventory
-                st.rerun()
+    if not filtered_by_category:
+        st.info("No items match this search.")
+    for category_name, filtered_items in filtered_by_category.items():
+        owned_count = sum(1 for item_name in filtered_items if picker_inventory.get(item_name, 0) > 0)
+        with st.expander(f"{category_name} ({len(filtered_items)} items, {owned_count} owned)", expanded=category_state.get(category_name, True)):
+            grid_cols = st.columns(4)
+            for idx, item_name in enumerate(filtered_items):
+                qty = int(picker_inventory.get(item_name, 0))
+                meta = item_meta_for(item_name, item_metadata)
+                blurb = meta["effects"][0] if meta["effects"] else "Useful crafting item"
+                with grid_cols[idx % 4]:
+                    st.markdown(
+                        f"""
+                        <div class="inventory-card">
+                            <div class="inventory-card-top">
+                                <span class="inventory-card-tag">{category_name}</span>
+                                <span class="inventory-card-qty">Owned: {qty}</span>
+                            </div>
+                            <div class="inventory-card-name">{item_name}</div>
+                            <div class="inventory-card-meta">{blurb}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    adjust_cols = st.columns(2)
+                    if adjust_cols[0].button("+1", key=f"add_{category_name}_{idx}_{item_name}", use_container_width=True):
+                        picker_inventory[item_name] = qty + 1
+                        st.session_state["picker_inventory"] = picker_inventory
+                        st.rerun()
+                    if adjust_cols[1].button("-1", key=f"sub_{category_name}_{idx}_{item_name}", use_container_width=True):
+                        if qty <= 1:
+                            picker_inventory.pop(item_name, None)
+                        else:
+                            picker_inventory[item_name] = qty - 1
+                        st.session_state["picker_inventory"] = picker_inventory
+                        st.rerun()
 
     st.session_state["picker_inventory"] = picker_inventory
     selected_inventory = Counter(picker_inventory)
 
     if selected_inventory:
         st.markdown("**Your selected bag**")
+        bag_cols = st.columns(3)
+        bag_cols[0].metric("Unique items", len(selected_inventory))
+        bag_cols[1].metric("Total quantity", sum(selected_inventory.values()))
+        selected_csv = render_inventory_table(selected_inventory).to_csv(index=False).encode("utf-8")
+        bag_cols[2].download_button(
+            "Download inventory CSV",
+            data=selected_csv,
+            file_name="outward_inventory.csv",
+            mime="text/csv",
+            use_container_width=True,
+            help="Export the current click-built inventory.",
+        )
         selected_df = render_inventory_table(selected_inventory)
         edited_selected = st.data_editor(
             selected_df,
@@ -857,8 +910,26 @@ def inject_styles() -> None:
             border: 1px solid rgba(255, 173, 229, 0.16);
             border-radius: 16px;
             padding: 0.75rem 0.8rem;
-            min-height: 118px;
+            min-height: 120px;
             margin-bottom: 0.45rem;
+        }
+        .inventory-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 0.4rem;
+            margin-bottom: 0.45rem;
+        }
+        .inventory-card-tag {
+            display: inline-block;
+            background: rgba(255, 105, 200, 0.1);
+            border: 1px solid rgba(255, 173, 229, 0.18);
+            color: var(--pink-soft);
+            border-radius: 999px;
+            padding: 0.14rem 0.42rem;
+            font-size: 0.68rem;
+            line-height: 1;
+            white-space: nowrap;
         }
         .inventory-card-name {
             font-weight: 700;
@@ -874,8 +945,24 @@ def inject_styles() -> None:
         }
         .inventory-card-qty {
             color: var(--pink-soft);
-            font-size: 0.88rem;
+            font-size: 0.76rem;
             font-weight: 700;
+        }
+        .nav-strip {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 0.4rem 0 1rem 0;
+        }
+        .nav-pill {
+            display: inline-block;
+            background: rgba(255, 105, 200, 0.1);
+            border: 1px solid rgba(255, 173, 229, 0.18);
+            color: var(--pink-soft);
+            border-radius: 999px;
+            padding: 0.3rem 0.65rem;
+            font-size: 0.78rem;
+            line-height: 1.1;
         }
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, rgba(20, 10, 24, 0.98), rgba(24, 14, 29, 0.98));
@@ -936,6 +1023,21 @@ def render_section_nav() -> str:
     )
 
 
+def render_nav_help() -> None:
+    st.markdown(
+        """
+        <div class="nav-strip">
+            <span class="nav-pill" title="Shows everything you can craft immediately with your current inventory, plus ranking options for healing, stamina, mana, and sale value.">Craft now</span>
+            <span class="nav-pill" title="Builds one chosen target through intermediate steps when it is not directly craftable yet.">Plan a target</span>
+            <span class="nav-pill" title="Calculates the smallest missing ingredient list for a multi-item build or prep list.">Shopping list</span>
+            <span class="nav-pill" title="Highlights recipes that are almost craftable so you can see what a quick pickup would unlock.">Missing ingredients</span>
+            <span class="nav-pill" title="Lets you browse the full recipe dataset, ingredient groups, and item stat metadata.">Recipe database</span>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_tab_help(title: str, description: str) -> None:
     st.markdown(
         f"""
@@ -961,7 +1063,7 @@ def recipe_sort_options() -> Dict[str, List[str]]:
     }
 
 
-st.set_page_config(page_title="Outward Crafting Helper", page_icon=":tea:", layout="wide")
+st.set_page_config(page_title="Alie's Outward Crafting", page_icon=":tea:", layout="wide")
 inject_styles()
 
 recipes_df = load_recipes()
@@ -975,7 +1077,7 @@ catalog_by_category = build_catalog_by_category(item_catalog, item_metadata)
 st.markdown(
     """
     <div class="hero-card">
-        <h1 style="margin: 0;">Outward Crafting Helper</h1>
+        <h1 style="margin: 0;">Alie's Outward Crafting</h1>
         <p class="section-note" style="margin: 0.35rem 0 0 0;">
             Compare recipes against your stash, rank crafts by recovery or value, and build a clean shopping list for the next run.
         </p>
@@ -984,6 +1086,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 active_section = render_section_nav()
+render_nav_help()
 
 with st.sidebar:
     st.subheader("Workshop settings")
