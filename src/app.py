@@ -609,13 +609,22 @@ def inventory_picker_state(catalog: List[str]) -> Dict[str, int]:
     return picker_inventory
 
 
+def inventory_filter_state() -> bool:
+    if "inventory_owned_only" not in st.session_state:
+        st.session_state["inventory_owned_only"] = False
+    return bool(st.session_state["inventory_owned_only"])
+
+
 def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, List[str]]) -> Counter:
     picker_inventory = inventory_picker_state(catalog)
+    show_owned_only = inventory_filter_state()
 
-    search = st.text_input(
+    search = st.selectbox(
         "Search items",
-        placeholder="Search for Gaberries, Gravel Beetle, Bread...",
-        help="Search across every known item in the inventory list below.",
+        options=[""] + catalog,
+        index=0,
+        placeholder="Start typing an ingredient name...",
+        help="Autocomplete search for any known ingredient or craftable item.",
     )
     selected_categories = st.multiselect(
         "Categories",
@@ -624,11 +633,10 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
         help="Filter the inventory list to the categories you want to see.",
     )
     action_cols = st.columns([1, 1, 2.2])
-    show_owned_only = action_cols[0].toggle(
-        "Owned only",
-        value=False,
-        help="Show only the items currently in your inventory.",
-    )
+    owned_label = "Owned only: On" if show_owned_only else "Owned only: Off"
+    if action_cols[0].button(owned_label, help="Toggle between all items and only items you currently own.", use_container_width=True):
+        st.session_state["inventory_owned_only"] = not show_owned_only
+        st.rerun()
     if action_cols[1].button("Clear", help="Remove every selected item from the inventory builder.", use_container_width=True):
         st.session_state["picker_inventory"] = {}
         picker_inventory = {}
