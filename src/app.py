@@ -609,107 +609,101 @@ def inventory_picker_state(catalog: List[str]) -> Dict[str, int]:
     return picker_inventory
 
 
-def category_ui_state(categories: List[str]) -> Dict[str, bool]:
-    if "inventory_category_open" not in st.session_state:
-        st.session_state["inventory_category_open"] = {category: True for category in categories}
-    current = st.session_state["inventory_category_open"]
-    merged = {category: bool(current.get(category, True)) for category in categories}
-    st.session_state["inventory_category_open"] = merged
-    return merged
-
-
 def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, List[str]]) -> Counter:
     picker_inventory = inventory_picker_state(catalog)
-    category_state = category_ui_state(list(catalog_by_category.keys()))
 
     search = st.text_input(
         "Search items",
         placeholder="Search for Gaberries, Gravel Beetle, Bread...",
-        help="Search across every known item, then browse the matching categories below.",
+        help="Search across every known item in the inventory list below.",
     )
     selected_categories = st.multiselect(
         "Categories",
         options=list(catalog_by_category.keys()),
         default=list(catalog_by_category.keys()),
-        help="Keep all categories on to search the full list, or narrow the view if you want.",
+        help="Filter the inventory list to the categories you want to see.",
     )
     action_cols = st.columns([1, 1, 2.2])
     show_owned_only = action_cols[0].toggle(
         "Owned only",
         value=False,
-        help="Hide items you have not selected yet.",
+        help="Show only the items currently in your inventory.",
     )
-    if action_cols[1].button("Clear", help="Remove every selected item from the click-to-add inventory builder.", use_container_width=True):
+    if action_cols[1].button("Clear", help="Remove every selected item from the inventory builder.", use_container_width=True):
         st.session_state["picker_inventory"] = {}
         picker_inventory = {}
+        st.rerun()
 
     st.markdown("**Inventory overview**")
-    st.caption("Search the full item list, then open only the category sections you care about. Each item keeps a small category tag.")
+    st.caption("Tick `Have it` to add an item, edit the quantity, and use the category tag column to stay oriented.")
 
     search_key = key(search)
-    active_categories = selected_categories or list(catalog_by_category.keys())
-    filtered_by_category: Dict[str, List[str]] = {}
-    for category_name in active_categories:
-        category_items = catalog_by_category.get(category_name, [])
-        matches = [
-            item_name
-            for item_name in category_items
-            if (not search_key or search_key in key(item_name)) and (not show_owned_only or picker_inventory.get(item_name, 0) > 0)
-        ]
-        if matches:
-            filtered_by_category[category_name] = matches
-    total_visible = sum(len(items) for items in filtered_by_category.values())
-
-    category_action_cols = st.columns(2)
-    if category_action_cols[0].button("Expand all categories", use_container_width=True):
-        st.session_state["inventory_category_open"] = {category: True for category in category_state}
-        st.rerun()
-    if category_action_cols[1].button("Collapse all categories", use_container_width=True):
-        st.session_state["inventory_category_open"] = {category: False for category in category_state}
-        st.rerun()
+    active_categories = set(selected_categories or list(catalog_by_category.keys()))
+    rows = []
+    for category_name, items in catalog_by_category.items():
+        if category_name not in active_categories:
+            continue
+        for item_name in items:
+            qty = int(picker_inventory.get(item_name, 0))
+            if search_key and search_key not in key(item_name):
+                continue
+            if show_owned_only and qty <= 0:
+                continue
+            rows.append(
+                {
+                    "Have it": qty > 0,
+                    "Ingredient": item_name,
+                    "Category": category_name,
+                    "Qty": qty if qty > 0 else 1,
+                }
+            )
 
     summary_cols = st.columns(4)
     summary_cols[0].metric("Categories shown", len(active_categories))
-    summary_cols[1].metric("Visible now", total_visible)
+    summary_cols[1].metric("Visible now", len(rows))
     summary_cols[2].metric("Selected total", sum(picker_inventory.values()))
     summary_cols[3].metric("Unique selected", len(picker_inventory))
 
-    if not filtered_by_category:
+    if not rows:
         st.info("No items match this search.")
-    for category_name, filtered_items in filtered_by_category.items():
-        owned_count = sum(1 for item_name in filtered_items if picker_inventory.get(item_name, 0) > 0)
-        with st.expander(f"{category_name} ({len(filtered_items)} items, {owned_count} owned)", expanded=category_state.get(category_name, True)):
-            grid_cols = st.columns(4)
-            for idx, item_name in enumerate(filtered_items):
-                qty = int(picker_inventory.get(item_name, 0))
-                meta = item_meta_for(item_name, item_metadata)
-                blurb = meta["effects"][0] if meta["effects"] else "Useful crafting item"
-                with grid_cols[idx % 4]:
-                    st.markdown(
-                        f"""
-                        <div class="inventory-card">
-                            <div class="inventory-card-top">
-                                <span class="inventory-card-tag">{category_name}</span>
-                                <span class="inventory-card-qty">Owned: {qty}</span>
-                            </div>
-                            <div class="inventory-card-name">{item_name}</div>
-                            <div class="inventory-card-meta">{blurb}</div>
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                    adjust_cols = st.columns(2)
-                    if adjust_cols[0].button("+1", key=f"add_{category_name}_{idx}_{item_name}", use_container_width=True):
-                        picker_inventory[item_name] = qty + 1
-                        st.session_state["picker_inventory"] = picker_inventory
-                        st.rerun()
-                    if adjust_cols[1].button("-1", key=f"sub_{category_name}_{idx}_{item_name}", use_container_width=True):
-                        if qty <= 1:
-                            picker_inventory.pop(item_name, None)
-                        else:
-                            picker_inventory[item_name] = qty - 1
-                        st.session_state["picker_inventory"] = picker_inventory
-                        st.rerun()
+    else:
+        edited_rows = st.data_editor(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+            height=420,
+            column_config={
+                "Have it": st.column_config.CheckboxColumn(
+                    "Have it",
+                    help="Turn this on to include the item in your inventory.",
+                ),
+                "Ingredient": st.column_config.TextColumn(
+                    "Ingredient",
+                    disabled=True,
+                ),
+                "Category": st.column_config.TextColumn(
+                    "Category",
+                    disabled=True,
+                ),
+                "Qty": st.column_config.NumberColumn(
+                    "Qty",
+                    min_value=1,
+                    step=1,
+                    help="How many of this item you currently own.",
+                ),
+            },
+            key="inventory_overview_editor",
+        )
+
+        visible_items = {normalize(row["Ingredient"]) for _, row in edited_rows.iterrows()}
+        for _, row in edited_rows.iterrows():
+            item_name = normalize(row["Ingredient"])
+            if not item_name:
+                continue
+            if bool(row["Have it"]):
+                picker_inventory[item_name] = int(row["Qty"])
+            elif item_name in visible_items:
+                picker_inventory.pop(item_name, None)
 
     st.session_state["picker_inventory"] = picker_inventory
     selected_inventory = Counter(picker_inventory)
