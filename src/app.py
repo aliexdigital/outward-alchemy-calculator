@@ -116,6 +116,39 @@ def build_item_catalog(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]) -
     return sorted(item for item in items if item and key(item) not in groups)
 
 
+def infer_item_category(item_name: str, metadata: Dict[str, dict]) -> str:
+    meta = item_meta_for(item_name, metadata)
+    if meta["category"]:
+        category = meta["category"]
+        if category in {"Potion", "Tea"}:
+            return "Potions and Drinks"
+        if category == "Food":
+            return "Food"
+        return category
+
+    name = key(item_name)
+    if any(token in name for token in ["potion", "elixir", "varnish", "bomb", "incense", "stone", "powder", "charge"]):
+        return "Alchemy"
+    if any(token in name for token in ["tea", "stew", "pie", "tartine", "sandwich", "omelet", "ration", "jam", "potage", "cake"]):
+        return "Food"
+    if any(token in name for token in ["water", "mushroom", "berry", "fruit", "egg", "meat", "fish", "wheat", "flour", "salt", "spice", "milk"]):
+        return "Cooking ingredients"
+    if any(token in name for token in ["scrap", "cloth", "wood", "stone", "hide", "oil", "quartz", "remains", "beetle", "bones", "tail", "chitin"]):
+        return "Materials"
+    if any(token in name for token in ["sword", "axe", "mace", "bow", "shield", "armor", "boots", "helm", "lantern", "staff", "spear", "dagger"]):
+        return "Equipment"
+    return "Other"
+
+
+@st.cache_data
+def build_catalog_by_category(catalog: List[str], metadata: Dict[str, dict]) -> Dict[str, List[str]]:
+    grouped: Dict[str, List[str]] = {}
+    for item_name in catalog:
+        grouped.setdefault(infer_item_category(item_name, metadata), []).append(item_name)
+    order = ["Food", "Potions and Drinks", "Cooking ingredients", "Alchemy", "Materials", "Equipment", "Other"]
+    return {category: sorted(grouped[category]) for category in order if category in grouped}
+
+
 def item_meta_for(item_name: str, metadata: Dict[str, dict]) -> dict:
     return metadata.get(
         key(item_name),
@@ -576,79 +609,72 @@ def inventory_picker_state(catalog: List[str]) -> Dict[str, int]:
     return picker_inventory
 
 
-def render_inventory_picker(catalog: List[str]) -> Counter:
+def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, List[str]]) -> Counter:
     picker_inventory = inventory_picker_state(catalog)
 
-    top_controls = st.columns([1.5, 1, 0.8])
+    top_controls = st.columns([1.4, 1.1, 0.8])
     search = top_controls[0].text_input(
-        "Search ingredients",
+        "Search items",
         placeholder="Search for Gaberries, Gravel Beetle, Bread...",
-        help="Filter the ingredient overview so you can click items instead of typing your inventory by hand.",
+        help="Quick filter across the current category.",
     )
-    quick_add = top_controls[1].multiselect(
-        "Quick add",
-        options=catalog,
-        default=[],
-        placeholder="Pick common items",
-        help="Fast way to add a few items before adjusting quantities below.",
+    category = top_controls[1].selectbox(
+        "Category",
+        options=list(catalog_by_category.keys()),
+        help="Browse a whole category at once, like a game inventory tab.",
     )
     if top_controls[2].button("Clear picker", help="Remove every selected item from the click-to-add inventory builder."):
         st.session_state["picker_inventory"] = {}
         picker_inventory = {}
 
-    for item_name in quick_add:
-        picker_inventory.setdefault(item_name, 1)
+    st.markdown("**Inventory overview**")
+    st.caption("Browse a category, then tap `+1` to add items to your stash. Use `-1` to remove them.")
 
     search_key = key(search)
-    filtered_catalog = [item_name for item_name in catalog if not search_key or search_key in key(item_name)]
+    category_items = catalog_by_category.get(category, [])
+    filtered_items = [item_name for item_name in category_items if not search_key or search_key in key(item_name)]
 
-    overview_rows = []
-    for item_name in filtered_catalog:
+    summary_cols = st.columns(3)
+    summary_cols[0].metric("Category items", len(category_items))
+    summary_cols[1].metric("Visible now", len(filtered_items))
+    summary_cols[2].metric("Selected total", sum(picker_inventory.values()))
+
+    grid_cols = st.columns(4)
+    if not filtered_items:
+        st.info("No items match this search in the current category.")
+    for idx, item_name in enumerate(filtered_items):
         qty = int(picker_inventory.get(item_name, 0))
-        overview_rows.append({"Have it": qty > 0, "Ingredient": item_name, "Qty": qty if qty > 0 else 1})
-
-    st.markdown("**Overview of ingredients**")
-    st.caption("Click the checkbox to add an item to your inventory, then set the quantity you own.")
-
-    edited_rows = st.data_editor(
-        pd.DataFrame(overview_rows),
-        use_container_width=True,
-        hide_index=True,
-        height=360,
-        column_config={
-            "Have it": st.column_config.CheckboxColumn(
-                "Have it",
-                help="Turn this on to include the ingredient in your inventory.",
-            ),
-            "Ingredient": st.column_config.TextColumn(
-                "Ingredient",
-                disabled=True,
-            ),
-            "Qty": st.column_config.NumberColumn(
-                "Qty",
-                min_value=1,
-                step=1,
-                help="How many of this item you currently have.",
-            ),
-        },
-        key="inventory_overview_editor",
-    )
-
-    visible_items = set(filtered_catalog)
-    for _, row in edited_rows.iterrows():
-        item_name = normalize(row["Ingredient"])
-        if not item_name:
-            continue
-        if bool(row["Have it"]):
-            picker_inventory[item_name] = int(row["Qty"])
-        elif item_name in visible_items:
-            picker_inventory.pop(item_name, None)
+        meta = item_meta_for(item_name, item_metadata)
+        blurb = meta["effects"][0] if meta["effects"] else infer_item_category(item_name, item_metadata)
+        with grid_cols[idx % 4]:
+            st.markdown(
+                f"""
+                <div class="inventory-card">
+                    <div class="inventory-card-name">{item_name}</div>
+                    <div class="inventory-card-meta">{blurb}</div>
+                    <div class="inventory-card-qty">Owned: {qty}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            adjust_cols = st.columns(2)
+            if adjust_cols[0].button("+1", key=f"add_{category}_{idx}_{item_name}", use_container_width=True):
+                picker_inventory[item_name] = qty + 1
+                st.session_state["picker_inventory"] = picker_inventory
+                st.rerun()
+            if adjust_cols[1].button("-1", key=f"sub_{category}_{idx}_{item_name}", use_container_width=True):
+                if qty <= 1:
+                    picker_inventory.pop(item_name, None)
+                else:
+                    picker_inventory[item_name] = qty - 1
+                st.session_state["picker_inventory"] = picker_inventory
+                st.rerun()
 
     st.session_state["picker_inventory"] = picker_inventory
     selected_inventory = Counter(picker_inventory)
 
     if selected_inventory:
-        st.markdown("**Selected inventory from the picker**")
+        st.markdown("**Your selected bag**")
         selected_df = render_inventory_table(selected_inventory)
         edited_selected = st.data_editor(
             selected_df,
@@ -665,7 +691,7 @@ def render_inventory_picker(catalog: List[str]) -> Counter:
         )
         st.session_state["picker_inventory"] = dict(selected_inventory)
     else:
-        st.info("Use the ingredient overview above to build your inventory by clicking items.")
+        st.info("Use the inventory overview above to add ingredients by category.")
 
     return selected_inventory
 
@@ -826,12 +852,34 @@ def inject_styles() -> None:
             margin: 0.35rem 0 1rem 0;
             color: var(--muted);
         }
+        .inventory-card {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+            border: 1px solid rgba(255, 173, 229, 0.16);
+            border-radius: 16px;
+            padding: 0.75rem 0.8rem;
+            min-height: 118px;
+            margin-bottom: 0.45rem;
+        }
+        .inventory-card-name {
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 0.25rem;
+            line-height: 1.2;
+        }
+        .inventory-card-meta {
+            color: var(--muted);
+            font-size: 0.84rem;
+            min-height: 2.2rem;
+            margin-bottom: 0.45rem;
+        }
+        .inventory-card-qty {
+            color: var(--pink-soft);
+            font-size: 0.88rem;
+            font-weight: 700;
+        }
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, rgba(20, 10, 24, 0.98), rgba(24, 14, 29, 0.98));
             border-right: 1px solid var(--border);
-        }
-        [data-baseweb="tab-list"] {
-            gap: 0.35rem;
         }
         button[kind], .stDownloadButton button, .stButton button {
             background: linear-gradient(135deg, var(--pink), var(--pink-deep)) !important;
@@ -869,24 +917,22 @@ def inject_styles() -> None:
         [data-testid="stMarkdownContainer"] a {
             color: var(--pink-soft);
         }
+        div[role="radiogroup"] {
+            gap: 0.5rem;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
 
-def render_hover_guide() -> None:
-    st.markdown(
-        """
-        <div class="tooltip-strip">
-            <span class="tooltip-chip" title="Craft now shows recipes you can make immediately from your current inventory.">Craft now</span>
-            <span class="tooltip-chip" title="Plan a target tries to craft one chosen item through intermediate recipes.">Plan a target</span>
-            <span class="tooltip-chip" title="Shopping list estimates the smallest missing ingredient list for a whole target build.">Shopping list</span>
-            <span class="tooltip-chip" title="Missing ingredients highlights recipes that are close, but not ready yet.">Missing ingredients</span>
-            <span class="tooltip-chip" title="Recipe database lets you browse all recipes plus your editable item metadata.">Recipe database</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
+def render_section_nav() -> str:
+    return st.radio(
+        "Navigate",
+        options=["Craft now", "Plan a target", "Shopping list", "Missing ingredients", "Recipe database"],
+        horizontal=True,
+        label_visibility="collapsed",
+        help="These are the main sections of the app. Pick one to switch views.",
     )
 
 
@@ -924,6 +970,7 @@ groups = sanitize_groups(recipes_df, raw_groups)
 item_metadata = load_item_metadata()
 recipe_index = build_recipe_index(recipes_df)
 item_catalog = build_item_catalog(recipes_df, groups)
+catalog_by_category = build_catalog_by_category(item_catalog, item_metadata)
 
 st.markdown(
     """
@@ -936,7 +983,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-render_hover_guide()
+active_section = render_section_nav()
 
 with st.sidebar:
     st.subheader("Workshop settings")
@@ -965,7 +1012,7 @@ with input_col:
     st.markdown('<div class="soft-card">', unsafe_allow_html=True)
     st.subheader("Inventory input")
     st.caption("Pick what you own from the ingredient overview below. Paste/upload is still available as a smaller bulk-add option.")
-    picker_inventory = render_inventory_picker(item_catalog)
+    picker_inventory = render_inventory_picker(item_catalog, catalog_by_category)
 
     extra_inventory = Counter()
     with st.expander("Optional: bulk add with paste or CSV / Excel"):
@@ -1039,11 +1086,7 @@ with summary_col:
     explain_columns("What these snapshot columns mean", preview_cols)
     st.markdown("</div>", unsafe_allow_html=True)
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Craft now", "Plan a target", "Shopping list", "Missing ingredients", "Recipe database"]
-)
-
-with tab1:
+if active_section == "Craft now":
     st.subheader("What you can craft right now")
     render_tab_help(
         "Craft now",
@@ -1091,7 +1134,7 @@ with tab1:
             help="Exports the currently ranked craftable list with effect and value columns.",
         )
 
-with tab2:
+elif active_section == "Plan a target":
     st.subheader("Multi-step planner")
     render_tab_help(
         "Plan a target",
@@ -1112,7 +1155,7 @@ with tab2:
         st.markdown("**Inventory after crafting one target**")
         st.dataframe(render_inventory_table(working_inventory), use_container_width=True, hide_index=True)
 
-with tab3:
+elif active_section == "Shopping list":
     st.subheader("Shopping list mode")
     render_tab_help(
         "Shopping list",
@@ -1152,7 +1195,7 @@ with tab3:
         with st.expander("Show remaining inventory after the build"):
             st.dataframe(render_inventory_table(final_inventory), use_container_width=True, hide_index=True)
 
-with tab4:
+elif active_section == "Missing ingredients":
     st.subheader("Almost craftable")
     render_tab_help(
         "Missing ingredients",
@@ -1179,7 +1222,7 @@ with tab4:
         )
         explain_columns("Column guide for Missing ingredients", near_cols)
 
-with tab5:
+else:
     st.subheader("Recipe database")
     render_tab_help(
         "Recipe database",
