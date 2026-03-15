@@ -636,7 +636,7 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
 
-    filter_cols = st.columns([2.8, 0.85, 0.85])
+    filter_cols = st.columns([2.9, 0.8, 0.7])
     selected_categories = filter_cols[0].multiselect(
         "Categories",
         options=list(catalog_by_category.keys()),
@@ -686,7 +686,7 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
             pd.DataFrame(rows),
             use_container_width=True,
             hide_index=True,
-            height=520,
+            height=500,
             column_config={
                 "Have it": st.column_config.CheckboxColumn(
                     "Have it",
@@ -720,7 +720,7 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
             elif item_name in visible_items:
                 picker_inventory.pop(item_name, None)
 
-    summary_cols = st.columns(4)
+    summary_cols = st.columns(4, gap="small")
     summary_cols[0].metric("Categories shown", len(active_categories))
     summary_cols[1].metric("Visible now", len(rows))
     summary_cols[2].metric("Selected total", sum(picker_inventory.values()))
@@ -728,6 +728,14 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
 
     st.session_state["picker_inventory"] = picker_inventory
     return Counter(picker_inventory)
+
+
+def order_craftable_results(craftable: pd.DataFrame, sort_mode: str) -> pd.DataFrame:
+    order_by = recipe_sort_options()[sort_mode]
+    ascending = [False] * (len(order_by) - 1) + [True]
+    if sort_mode == "Result A-Z":
+        ascending = [True]
+    return craftable.sort_values(order_by, ascending=ascending)
 
 
 def build_metadata_table(metadata: Dict[str, dict]) -> pd.DataFrame:
@@ -847,6 +855,8 @@ def inject_styles() -> None:
             --bg-soft: #1b1020;
             --panel: rgba(27, 16, 32, 0.92);
             --panel-2: rgba(37, 20, 42, 0.94);
+            --panel-side: rgba(24, 22, 31, 0.9);
+            --panel-side-2: rgba(21, 20, 28, 0.95);
             --border: rgba(255, 173, 229, 0.16);
             --text: #f8eefd;
             --muted: #d1b4c8;
@@ -878,42 +888,51 @@ def inject_styles() -> None:
             color: var(--text);
         }
         .block-container {
-            padding-top: 1.8rem;
-            padding-bottom: 2.5rem;
+            padding-top: 1.05rem;
+            padding-bottom: 1.8rem;
             max-width: 1680px;
         }
         .hero-card {
             background: linear-gradient(135deg, rgba(38, 17, 44, 0.96), rgba(27, 16, 32, 0.94));
             border: 1px solid var(--border);
-            border-radius: 22px;
-            padding: 1.25rem 1.4rem 1rem 1.4rem;
-            box-shadow: 0 18px 40px var(--shadow);
-            margin: 0 auto 1rem auto;
-            max-width: 860px;
+            border-radius: 16px;
+            padding: 0.78rem 1.2rem 0.62rem 1.2rem;
+            box-shadow: 0 12px 30px var(--shadow);
+            margin: 0 auto 0.45rem auto;
+            max-width: 760px;
             text-align: center;
         }
         .hero-title {
-            font-size: clamp(2.2rem, 4vw, 3.4rem);
-            line-height: 1.05;
+            font-size: clamp(1.95rem, 3vw, 2.85rem);
+            line-height: 0.98;
+            letter-spacing: 0.02em;
         }
         .hero-subtitle {
-            max-width: 680px;
-            margin: 0.6rem auto 0 auto;
+            max-width: 610px;
+            margin: 0.35rem auto 0 auto;
             color: var(--muted);
             font-family: "Manrope", "Segoe UI", sans-serif;
-            font-size: clamp(0.78rem, 1.1vw, 0.96rem);
+            font-size: clamp(0.66rem, 0.95vw, 0.82rem);
             font-weight: 300;
             text-transform: uppercase;
-            letter-spacing: 0.06em;
-            line-height: 1.5;
+            letter-spacing: 0.16em;
+            line-height: 1.35;
         }
         .soft-card {
             background: linear-gradient(180deg, rgba(34, 18, 40, 0.92), rgba(24, 14, 29, 0.92));
-            border: 1px solid rgba(157, 74, 255, 0.34);
+            border: 1px solid rgba(157, 74, 255, 0.22);
             border-radius: 10px;
-            padding: 0.95rem 1rem;
-            margin-bottom: 0.45rem;
-            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+            padding: 0.8rem 0.9rem;
+            margin-bottom: 0.4rem;
+            box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+        }
+        .side-card {
+            background: linear-gradient(180deg, var(--panel-side), var(--panel-side-2));
+            border: 1px solid rgba(157, 74, 255, 0.14);
+            border-radius: 10px;
+            padding: 0.72rem 0.82rem;
+            margin-bottom: 0.38rem;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
         }
         .section-note {
             color: var(--muted);
@@ -931,9 +950,15 @@ def inject_styles() -> None:
             background: rgba(255, 105, 200, 0.08);
             border: 1px solid rgba(255, 173, 229, 0.14);
             border-radius: 14px;
-            padding: 0.6rem 0.8rem;
-            margin: 0.25rem 0 0.8rem 0;
+            padding: 0.42rem 0.65rem;
+            margin: 0.15rem 0 0.55rem 0;
             color: var(--muted);
+        }
+        .thin-divider {
+            width: 100%;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(157, 74, 255, 0), rgba(157, 74, 255, 0.58), rgba(157, 74, 255, 0));
+            margin: 0.3rem 0 0.55rem 0;
         }
         button[kind="primary"], .stDownloadButton button[kind="primary"], .stButton button[kind="primary"] {
             background: linear-gradient(135deg, var(--pink), var(--pink-deep)) !important;
@@ -942,17 +967,17 @@ def inject_styles() -> None:
             border-radius: 999px !important;
             font-weight: 700 !important;
             box-shadow: 0 8px 18px rgba(255, 74, 184, 0.22) !important;
-            min-height: 2.45rem !important;
-            padding: 0.32rem 0.9rem !important;
+            min-height: 2.12rem !important;
+            padding: 0.2rem 0.78rem !important;
         }
         button[kind="secondary"], .stDownloadButton button[kind="secondary"], .stButton button[kind="secondary"] {
-            background: rgba(255, 255, 255, 0.05) !important;
-            color: rgba(248, 238, 253, 0.82) !important;
-            border: 1px solid rgba(157, 74, 255, 0.18) !important;
+            background: rgba(255, 255, 255, 0.035) !important;
+            color: rgba(248, 238, 253, 0.78) !important;
+            border: 1px solid rgba(157, 74, 255, 0.14) !important;
             border-radius: 999px !important;
             font-weight: 600 !important;
-            min-height: 1.95rem !important;
-            padding: 0.12rem 0.62rem !important;
+            min-height: 1.8rem !important;
+            padding: 0.08rem 0.52rem !important;
             box-shadow: none !important;
         }
         .stSelectbox div[data-baseweb="select"] > div,
@@ -971,9 +996,9 @@ def inject_styles() -> None:
         }
         [data-testid="stMetric"] {
             background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(157, 74, 255, 0.18);
-            border-radius: 10px;
-            padding: 0.45rem 0.55rem;
+            border: 1px solid rgba(157, 74, 255, 0.14);
+            border-radius: 9px;
+            padding: 0.32rem 0.4rem;
         }
         [data-testid="stMetric"] label, [data-testid="stMetric"] div {
             text-align: center;
@@ -1010,27 +1035,28 @@ def inject_styles() -> None:
         }
         .muted-nav-note {
             color: rgba(248, 238, 253, 0.6);
-            font-size: 0.86rem;
-            margin: 0.15rem 0 0.9rem 0;
+            font-size: 0.78rem;
+            margin: 0.08rem 0 0.25rem 0;
         }
         [data-testid="stMarkdownContainer"] a {
             color: var(--pink-soft);
         }
         div[role="radiogroup"] {
-            gap: 0.25rem;
+            gap: 0.15rem;
         }
         div[role="radiogroup"] > label {
             background: transparent;
             border: none;
             border-radius: 0;
-            padding: 0.05rem 0.18rem;
+            padding: 0.02rem 0.14rem;
+            min-height: 1.25rem;
         }
         .stCheckbox {
             display: flex;
             align-items: center;
-            min-height: 2.2rem;
-            padding-top: 0.1rem;
-            min-width: 8.2rem;
+            min-height: 1.8rem;
+            padding-top: 0;
+            min-width: 7.4rem;
             justify-content: center;
         }
         .stCheckbox label {
@@ -1046,15 +1072,23 @@ def inject_styles() -> None:
             display: flex;
             flex-wrap: wrap;
             gap: 0.28rem;
-            margin: 0.2rem 0 0.45rem 0;
+            margin: 0.16rem 0 0.35rem 0;
         }
         [data-baseweb="tag"] {
-            transform: scale(0.84);
+            transform: scale(0.76);
             transform-origin: left center;
         }
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, rgba(18, 10, 22, 0.96), rgba(24, 14, 29, 0.96));
             border-right: 1px solid rgba(157, 74, 255, 0.18);
+        }
+        section[data-testid="stSidebar"] details {
+            border: 1px solid rgba(157, 74, 255, 0.12);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.025);
+        }
+        section[data-testid="stSidebar"] details summary {
+            font-size: 0.92rem;
         }
         .section-stack {
             display: block;
@@ -1134,13 +1168,16 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
-active_section = render_section_nav()
-render_active_section_note(active_section)
-
 using_live = (DATA_DIR / "recipes.csv").exists()
 render_column_help_sidebar()
 
-inventory_col, overview_col = st.columns([1.18, 0.82], gap="large")
+nav_col, _ = st.columns([0.72, 0.28], gap="small")
+with nav_col:
+    active_section = render_section_nav()
+    render_active_section_note(active_section)
+st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
+
+inventory_col, overview_col = st.columns([1.18, 0.82], gap="medium")
 with inventory_col:
     st.markdown('<div class="soft-card">', unsafe_allow_html=True)
     st.subheader("Inventory input")
@@ -1193,12 +1230,13 @@ with inventory_col:
     st.markdown("</div>", unsafe_allow_html=True)
 
 inventory_df = render_inventory_table(inventory)
+inventory_overview_height = 220 if inventory_df.empty else min(320, max(200, 118 + len(inventory_df) * 24))
 
 with overview_col:
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
+    st.markdown('<div class="side-card">', unsafe_allow_html=True)
     st.subheader("Inventory overview")
     st.caption("Your currently selected inventory, including anything added from paste or upload.")
-    bag_cols = st.columns(3)
+    bag_cols = st.columns([0.92, 0.92, 1.06], gap="small")
     bag_cols[0].metric("Unique items", len(inventory))
     bag_cols[1].metric("Total quantity", sum(inventory.values()))
     bag_cols[2].download_button(
@@ -1210,28 +1248,32 @@ with overview_col:
         type="secondary",
     )
     render_table_header("Inventory overview", "This table shows the current inventory feeding the calculator.")
-    st.dataframe(inventory_df, use_container_width=True, hide_index=True, height=420)
+    st.dataframe(inventory_df, use_container_width=True, hide_index=True, height=inventory_overview_height)
     st.markdown("</div>", unsafe_allow_html=True)
 
 filtered = recipes_df[recipes_df["station"].isin(station_filter)].copy()
 results = build_direct_results(filtered, inventory, groups, item_metadata)
 craftable = results[results["max_crafts"] > 0].copy()
 near = results[(results["max_crafts"] == 0) & (results["missing_slots"] <= 2)].copy()
+ordered_preview = order_craftable_results(craftable, "Smart score") if not craftable.empty else craftable
 
 top_heal = craftable.sort_values(["healing_total", "result"], ascending=[False, True]).head(1)
 top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[False, True]).head(1)
 top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
 
 with overview_col:
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-    st.subheader("Quick results")
-    st.caption("Everything you can do right now with the current inventory and station filters.")
-    metric_cols = st.columns(2)
-    metric_cols[0].metric("Direct crafts", len(craftable))
-    metric_cols[1].metric("Near crafts", len(near))
-    best_cols = st.columns(3)
+    st.markdown('<div class="side-card">', unsafe_allow_html=True)
+    st.subheader("Snapshot")
+    st.caption("Compact summary of your current stash, direct options, and recipe coverage.")
+    metric_cols = st.columns(2, gap="small")
+    metric_cols[0].metric("Inventory lines", len(inventory_df))
+    metric_cols[1].metric("Known recipes", len(filtered))
+    detail_cols = st.columns(2, gap="small")
+    detail_cols[0].metric("Direct crafts", len(craftable))
+    detail_cols[1].metric("Near crafts", len(near))
+    best_cols = st.columns(3, gap="small")
     best_cols[0].metric(
-        "Best healing",
+        "Best heal",
         top_heal.iloc[0]["result"] if not top_heal.empty and top_heal.iloc[0]["healing_total"] > 0 else "None",
     )
     best_cols[1].metric(
@@ -1242,180 +1284,190 @@ with overview_col:
         "Best mana",
         top_mana.iloc[0]["result"] if not top_mana.empty and top_mana.iloc[0]["mana_total"] > 0 else "None",
     )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+with overview_col:
+    st.markdown('<div class="side-card">', unsafe_allow_html=True)
+    st.subheader("Best direct options")
+    st.caption("A quiet shortlist of the strongest immediate crafts from your current inventory.")
+    metric_cols = st.columns(2, gap="small")
+    metric_cols[0].metric("Direct crafts", len(craftable))
+    metric_cols[1].metric("Near crafts", len(near))
     preview_cols = ["result", "max_crafts", "max_total_output", "station", "effects", "ingredients"]
     render_table_header("Best direct options", "A quick shortlist of the most immediately craftable options from your current inventory.")
     st.dataframe(
-        present_recipe_table(craftable.head(12), preview_cols),
+        present_recipe_table(ordered_preview.head(12), preview_cols),
         use_container_width=True,
         hide_index=True,
-        height=280,
+        height=250,
     )
     st.markdown("</div>", unsafe_allow_html=True)
 
-with inventory_col:
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-    st.subheader("Snapshot")
-    st.caption("A compact overview of inventory scale, recipe coverage, and what is nearly available.")
-    metric_cols = st.columns(4)
-    metric_cols[0].metric("Inventory lines", len(inventory_df))
-    metric_cols[1].metric("Direct crafts", len(craftable))
-    metric_cols[2].metric("Near crafts (<=2)", len(near))
-    metric_cols[3].metric("Known recipes", len(filtered))
-    st.markdown("</div>", unsafe_allow_html=True)
-
-with st.expander("Craft now", expanded=active_section == "Craft now"):
-    render_tab_help(
-        "Craft now",
-        "This tab answers: what can I make immediately from what I already have? Use the sorting menu to favor practical output, healing, stamina, mana, or vendor value."
-    )
-    if craftable.empty:
-        st.info("No direct crafts found with the current inventory.")
-    else:
-        sort_mode = st.selectbox(
-            "Sort results by",
-            list(recipe_sort_options().keys()),
-            index=0,
-            help="Choose what 'best' means for this pass: convenience, total output, healing, stamina, mana, or sale value.",
+with overview_col:
+    with st.expander("What you can craft right now", expanded=active_section == "Craft now"):
+        render_tab_help(
+            "Craft now",
+            "This answers the live question: what can I make immediately from what I already have? Sort by output, healing, stamina, mana, or sale value."
         )
-        order_by = recipe_sort_options()[sort_mode]
-        ascending = [False] * (len(order_by) - 1) + [True]
-        if sort_mode == "Result A-Z":
-            ascending = [True]
-        ordered = craftable.sort_values(order_by, ascending=ascending)
-        craft_now_cols = [
-            "result",
-            "result_qty_per_craft",
-            "max_crafts",
-            "max_total_output",
-            "heal_each",
-            "stamina_each",
-            "mana_each",
-            "sale_value_each",
-            "effects",
-            "station",
-            "ingredients",
-        ]
-        render_table_header("Craftable recipes", "Recipes you can make immediately with the current inventory and station filters.")
-        st.dataframe(present_recipe_table(ordered, craft_now_cols), use_container_width=True, hide_index=True, height=420)
-        csv_bytes = ordered.drop(columns=["ingredient_list"]).to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "Download craftable recipes as CSV",
-            data=csv_bytes,
-            file_name="outward_craftable_recipes.csv",
-            mime="text/csv",
-            help="Exports the currently ranked craftable list with effect and value columns.",
-            type="secondary",
-        )
-
-with st.expander("Plan a target", expanded=active_section == "Plan a target"):
-    render_tab_help(
-        "Plan a target",
-        "This tab tries to build one chosen item through sub-crafts. It is useful when an item is not directly craftable but can be reached through intermediate recipes."
-    )
-    target = st.selectbox(
-        "Choose a target item",
-        sorted(recipes_df["result"].unique().tolist()),
-        help="Pick one craft result and the planner will try to reach it through sub-crafts.",
-    )
-    working_inventory = Counter(inventory)
-    plan = plan_item(target, working_inventory, groups, recipe_index, depth=0, max_depth=max_depth, stack=tuple())
-    if plan is None:
-        st.warning("No multi-step plan found with the current inventory and planner depth.")
-    else:
-        st.success(f"A plan was found for at least 1x {target}.")
-        st.code("\n".join(format_plan_lines(plan)), language="text")
-        render_table_header("Inventory after crafting one target", "A preview of what remains in your bag after following the plan once.")
-        st.dataframe(render_inventory_table(working_inventory), use_container_width=True, hide_index=True, height=280)
-
-with st.expander("Shopping list", expanded=active_section == "Shopping list"):
-    render_tab_help(
-        "Shopping list",
-        "This mode is for build prep. Paste several target items and quantities, and the app estimates the smallest missing ingredient list it can find from your current stash."
-    )
-    target_text = st.text_area(
-        "Target build",
-        value="Great Life Potion,2\nBread,2\nTravel Ration,1",
-        height=150,
-        help="Use `item,qty` lines just like inventory input. This can contain multiple goal items.",
-    )
-    target_counts = counts_from_text(target_text)
-    if not target_counts:
-        st.info("Add at least one target item to generate a shopping list.")
-    else:
-        missing_counts, shopping_lines, final_inventory = build_shopping_list(
-            target_counts, inventory, groups, recipe_index, max_depth=max_depth
-        )
-        render_table_header("Requested build", "The target items and quantities you asked the shopping list to satisfy.")
-        st.dataframe(render_inventory_table(target_counts, item_label="target"), use_container_width=True, hide_index=True)
-        if not missing_counts:
-            st.success("Your current stash is enough for this build. No shopping needed.")
+        if craftable.empty:
+            st.info("No direct crafts found with the current inventory.")
         else:
-            missing_df = render_inventory_table(missing_counts)
-            render_table_header("Minimum missing ingredients found", "The smallest missing ingredient list the planner found for the requested build.")
-            st.dataframe(missing_df, use_container_width=True, hide_index=True)
-            shopping_csv = missing_df.to_csv(index=False).encode("utf-8")
+            sort_mode = st.selectbox(
+                "Sort results by",
+                list(recipe_sort_options().keys()),
+                index=0,
+                key="craft_now_sort_side",
+                help="Choose what 'best' means for this pass: convenience, total output, healing, stamina, mana, or sale value.",
+            )
+            ordered = order_craftable_results(craftable, sort_mode)
+            craft_now_cols = [
+                "result",
+                "result_qty_per_craft",
+                "max_crafts",
+                "max_total_output",
+                "heal_each",
+                "stamina_each",
+                "mana_each",
+                "sale_value_each",
+                "effects",
+                "station",
+                "ingredients",
+            ]
+            render_table_header("Craftable recipes", "Recipes you can make immediately with the current inventory and station filters.")
+            st.dataframe(present_recipe_table(ordered, craft_now_cols), use_container_width=True, hide_index=True, height=340)
+            csv_bytes = ordered.drop(columns=["ingredient_list"]).to_csv(index=False).encode("utf-8")
             st.download_button(
-                "Download shopping list as CSV",
-                data=shopping_csv,
-                file_name="outward_shopping_list.csv",
+                "Download craftable recipes as CSV",
+                data=csv_bytes,
+                file_name="outward_craftable_recipes.csv",
                 mime="text/csv",
-                help="Exports the missing ingredient list for the current target build.",
+                help="Exports the currently ranked craftable list with effect and value columns.",
                 type="secondary",
             )
 
-        with st.expander("Show build plan"):
-            st.code("\n".join(shopping_lines), language="text")
-        with st.expander("Show remaining inventory after the build"):
-            st.dataframe(render_inventory_table(final_inventory), use_container_width=True, hide_index=True)
-
-with st.expander("Missing ingredients", expanded=active_section == "Missing ingredients"):
-    render_tab_help(
-        "Missing ingredients",
-        "This is the near-miss tab. It shows recipes that are close enough to matter, so you can decide which quick pickups unlock the most useful crafts."
-    )
-    if near.empty:
-        st.info("Nothing is within one or two missing ingredient slots right now.")
-    else:
-        near_cols = [
-            "result",
-            "missing_slots",
-            "missing_items",
-            "heal_each",
-            "stamina_each",
-            "mana_each",
-            "sale_value_each",
-            "station",
-            "ingredients",
-        ]
-        render_table_header("Almost craftable recipes", "Recipes that are one or two ingredient slots away from being craftable.")
-        st.dataframe(
-            present_recipe_table(near.sort_values(["missing_slots", "result"]), near_cols),
-            use_container_width=True,
-            hide_index=True,
-            height=380,
+    with st.expander("How to read this sidebar", expanded=False):
+        st.markdown(
+            """
+            - **Inventory overview** shows the exact bag the calculator is using right now.
+            - **Snapshot** is the compact summary: how many recipes are known, direct, or nearly available.
+            - **Best direct options** is the quick shortlist for immediate crafting.
+            - **What you can craft right now** expands into the full ranked craftable table.
+            """
         )
 
-with st.expander("Recipe database", expanded=active_section == "Recipe database"):
-    render_tab_help(
-        "Recipe database",
-        "This is the reference tab. Browse the full recipe set, cleaned ingredient groups, and the editable item stats that power the ranking views."
-    )
-    show_recipes = recipes_df.copy()
-    show_recipes["ingredients"] = show_recipes["ingredient_list"].apply(lambda items: ", ".join(items))
-    show_recipes["effects"] = show_recipes["result"].apply(lambda result: "; ".join(item_meta_for(result, item_metadata)["effects"]))
-    show_recipes["heal"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["heal"])
-    show_recipes["stamina"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["stamina"])
-    show_recipes["mana"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["mana"])
-    show_recipes["sale_value"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["sale_value"])
-    show_recipes = show_recipes.drop(columns=["ingredient_list", "result_key"])
-    render_table_header("Recipe database", "The full recipe dataset currently loaded into the app.")
-    st.dataframe(show_recipes, use_container_width=True, hide_index=True, height=420)
+if active_section == "Plan a target":
+    with st.expander("Plan a target", expanded=True):
+        render_tab_help(
+            "Plan a target",
+            "This tab tries to build one chosen item through sub-crafts. It is useful when an item is not directly craftable but can be reached through intermediate recipes."
+        )
+        target = st.selectbox(
+            "Choose a target item",
+            sorted(recipes_df["result"].unique().tolist()),
+            help="Pick one craft result and the planner will try to reach it through sub-crafts.",
+        )
+        working_inventory = Counter(inventory)
+        plan = plan_item(target, working_inventory, groups, recipe_index, depth=0, max_depth=max_depth, stack=tuple())
+        if plan is None:
+            st.warning("No multi-step plan found with the current inventory and planner depth.")
+        else:
+            st.success(f"A plan was found for at least 1x {target}.")
+            st.code("\n".join(format_plan_lines(plan)), language="text")
+            render_table_header("Inventory after crafting one target", "A preview of what remains in your bag after following the plan once.")
+            st.dataframe(render_inventory_table(working_inventory), use_container_width=True, hide_index=True, height=280)
 
-    if groups:
-        render_table_header("Ingredient groups", "Grouped ingredient tokens such as Water, Vegetable, or Meat and the items that can fill them.")
-        group_rows = [{"group": group_name, "members": ", ".join(members)} for group_name, members in sorted(groups.items())]
-        st.dataframe(pd.DataFrame(group_rows), use_container_width=True, hide_index=True)
+elif active_section == "Shopping list":
+    with st.expander("Shopping list", expanded=True):
+        render_tab_help(
+            "Shopping list",
+            "This mode is for build prep. Paste several target items and quantities, and the app estimates the smallest missing ingredient list it can find from your current stash."
+        )
+        target_text = st.text_area(
+            "Target build",
+            value="Great Life Potion,2\nBread,2\nTravel Ration,1",
+            height=150,
+            help="Use `item,qty` lines just like inventory input. This can contain multiple goal items.",
+        )
+        target_counts = counts_from_text(target_text)
+        if not target_counts:
+            st.info("Add at least one target item to generate a shopping list.")
+        else:
+            missing_counts, shopping_lines, final_inventory = build_shopping_list(
+                target_counts, inventory, groups, recipe_index, max_depth=max_depth
+            )
+            render_table_header("Requested build", "The target items and quantities you asked the shopping list to satisfy.")
+            st.dataframe(render_inventory_table(target_counts, item_label="target"), use_container_width=True, hide_index=True)
+            if not missing_counts:
+                st.success("Your current stash is enough for this build. No shopping needed.")
+            else:
+                missing_df = render_inventory_table(missing_counts)
+                render_table_header("Minimum missing ingredients found", "The smallest missing ingredient list the planner found for the requested build.")
+                st.dataframe(missing_df, use_container_width=True, hide_index=True)
+                shopping_csv = missing_df.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "Download shopping list as CSV",
+                    data=shopping_csv,
+                    file_name="outward_shopping_list.csv",
+                    mime="text/csv",
+                    help="Exports the missing ingredient list for the current target build.",
+                    type="secondary",
+                )
 
-    if item_metadata:
-        render_table_header("Item effects and prices", "Editable metadata that powers effect text, recovery values, and sale-value ranking.")
-        st.dataframe(build_metadata_table(item_metadata), use_container_width=True, hide_index=True)
+            with st.expander("Show build plan"):
+                st.code("\n".join(shopping_lines), language="text")
+            with st.expander("Show remaining inventory after the build"):
+                st.dataframe(render_inventory_table(final_inventory), use_container_width=True, hide_index=True)
+
+elif active_section == "Missing ingredients":
+    with st.expander("Missing ingredients", expanded=True):
+        render_tab_help(
+            "Missing ingredients",
+            "This is the near-miss tab. It shows recipes that are close enough to matter, so you can decide which quick pickups unlock the most useful crafts."
+        )
+        if near.empty:
+            st.info("Nothing is within one or two missing ingredient slots right now.")
+        else:
+            near_cols = [
+                "result",
+                "missing_slots",
+                "missing_items",
+                "heal_each",
+                "stamina_each",
+                "mana_each",
+                "sale_value_each",
+                "station",
+                "ingredients",
+            ]
+            render_table_header("Almost craftable recipes", "Recipes that are one or two ingredient slots away from being craftable.")
+            st.dataframe(
+                present_recipe_table(near.sort_values(["missing_slots", "result"]), near_cols),
+                use_container_width=True,
+                hide_index=True,
+                height=380,
+            )
+
+elif active_section == "Recipe database":
+    with st.expander("Recipe database", expanded=True):
+        render_tab_help(
+            "Recipe database",
+            "This is the reference tab. Browse the full recipe set, cleaned ingredient groups, and the editable item stats that power the ranking views."
+        )
+        show_recipes = recipes_df.copy()
+        show_recipes["ingredients"] = show_recipes["ingredient_list"].apply(lambda items: ", ".join(items))
+        show_recipes["effects"] = show_recipes["result"].apply(lambda result: "; ".join(item_meta_for(result, item_metadata)["effects"]))
+        show_recipes["heal"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["heal"])
+        show_recipes["stamina"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["stamina"])
+        show_recipes["mana"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["mana"])
+        show_recipes["sale_value"] = show_recipes["result"].apply(lambda result: item_meta_for(result, item_metadata)["sale_value"])
+        show_recipes = show_recipes.drop(columns=["ingredient_list", "result_key"])
+        render_table_header("Recipe database", "The full recipe dataset currently loaded into the app.")
+        st.dataframe(show_recipes, use_container_width=True, hide_index=True, height=420)
+
+        if groups:
+            render_table_header("Ingredient groups", "Grouped ingredient tokens such as Water, Vegetable, or Meat and the items that can fill them.")
+            group_rows = [{"group": group_name, "members": ", ".join(members)} for group_name, members in sorted(groups.items())]
+            st.dataframe(pd.DataFrame(group_rows), use_container_width=True, hide_index=True)
+
+        if item_metadata:
+            render_table_header("Item effects and prices", "Editable metadata that powers effect text, recovery values, and sale-value ranking.")
+            st.dataframe(build_metadata_table(item_metadata), use_container_width=True, hide_index=True)
