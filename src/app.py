@@ -645,38 +645,71 @@ def utility_rail_defaults(recipes_df: pd.DataFrame) -> Tuple[List[str], int, Cou
     return station_filter, max_depth, extra_inventory
 
 
-def add_selected_search_item() -> None:
-    selected = normalize(st.session_state.get("inventory_search_select"))
+def add_inventory_quick_entry(selected_value: Optional[str], quantity_value: int) -> bool:
+    selected = normalize(selected_value)
     if not selected:
-        return
+        return False
     picker_inventory = {
         normalize(item_name): int(qty)
         for item_name, qty in st.session_state.get("picker_inventory", {}).items()
         if int(qty) > 0
     }
     current_qty = int(picker_inventory.get(selected, 0))
-    picker_inventory[selected] = max(1, current_qty + (0 if current_qty > 0 else 1))
+    quantity = max(1, int(quantity_value))
+    picker_inventory[selected] = current_qty + quantity
     st.session_state["picker_inventory"] = picker_inventory
     st.session_state["inventory_search_select"] = None
+    st.session_state["inventory_add_qty"] = 1
+    return True
 
 
 # UI rendering keeps the working Streamlit widgets but places them in named sections.
 def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, List[str]]) -> Counter:
     picker_inventory = inventory_picker_state(catalog)
+    if "inventory_add_qty" not in st.session_state:
+        st.session_state["inventory_add_qty"] = 1
 
     with named_block("inventory-search-block"):
-        st.selectbox(
-            "Search items",
-            options=catalog,
-            index=None,
-            key="inventory_search_select",
-            placeholder="Start typing an ingredient name...",
-            on_change=add_selected_search_item,
-            help="Start typing to filter ingredient suggestions in the dropdown, then pick one to add it.",
-        )
+        with st.form("inventory_quick_add_form"):
+            add_cols = st.columns([3.5, 0.9, 0.78], gap="small")
+            with add_cols[0]:
+                with named_block("inventory-search-select"):
+                    st.selectbox(
+                        "Search items",
+                        options=catalog,
+                        index=None,
+                        key="inventory_search_select",
+                        placeholder="Start typing an ingredient name...",
+                        help="Search the ingredient dropdown, pick one match, then add it with the quantity beside it.",
+                    )
+            with add_cols[1]:
+                with named_block("inventory-add-qty"):
+                    st.number_input(
+                        "Qty",
+                        min_value=1,
+                        step=1,
+                        key="inventory_add_qty",
+                        help="How many of the selected ingredient to add right now.",
+                    )
+            with add_cols[2]:
+                with named_block("inventory-add-button"):
+                    st.markdown('<div class="quick-add-spacer"></div>', unsafe_allow_html=True)
+                    add_submitted = st.form_submit_button(
+                        "Add",
+                        use_container_width=True,
+                        type="secondary",
+                        help="Add the selected ingredient and quantity into the inventory.",
+                    )
+        if add_submitted:
+            did_add = add_inventory_quick_entry(
+                st.session_state.get("inventory_search_select"),
+                int(st.session_state.get("inventory_add_qty", 1)),
+            )
+            if did_add:
+                st.rerun()
 
     with named_block("inventory-filter-toolbar"):
-        filter_cols = st.columns([3.35, 0.9, 0.72], gap="small")
+        filter_cols = st.columns([3.45, 0.92, 0.74], gap="small")
         with filter_cols[0]:
             with named_block("categories-toolbar"):
                 selected_categories = st.multiselect(
