@@ -1,0 +1,85 @@
+import type {
+  DirectResponse,
+  InventoryResponse,
+  MetadataResponse,
+  OverviewResponse,
+  PlannerResponse,
+  ShoppingListResponse,
+  NearResponse,
+} from "./types";
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, init);
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Request failed: ${response.status}`);
+  }
+  return response.json() as Promise<T>;
+}
+
+export const api = {
+  getMetadata: () => request<MetadataResponse>("/api/metadata"),
+  getInventory: () => request<InventoryResponse>("/api/inventory"),
+  getOverview: (stations: string[]) => request<OverviewResponse>(`/api/results/overview${stations.length ? `?${new URLSearchParams(stations.map((station) => ["stations", station]))}` : ""}`),
+  getDirect: (sortMode: string, stations: string[], limit?: number) => {
+    const params = new URLSearchParams();
+    params.set("sort_mode", sortMode);
+    if (limit) params.set("limit", String(limit));
+    stations.forEach((station) => params.append("stations", station));
+    return request<DirectResponse>(`/api/results/direct?${params.toString()}`);
+  },
+  getNear: (stations: string[], limit?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.set("limit", String(limit));
+    stations.forEach((station) => params.append("stations", station));
+    return request<NearResponse>(`/api/results/near?${params.toString()}`);
+  },
+  addInventoryItem: (item: string, qty: number) =>
+    request<InventoryResponse>("/api/inventory/items/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ item, qty }),
+    }),
+  setInventoryItem: (item: string, qty: number) =>
+    request<InventoryResponse>(`/api/inventory/items/${encodeURIComponent(item)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ qty }),
+    }),
+  replaceInventory: (items: Array<{ item: string; qty: number }>) =>
+    request<InventoryResponse>("/api/inventory/replace", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    }),
+  importText: (text: string) =>
+    request<InventoryResponse>("/api/inventory/import/text", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    }),
+  importCsv: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<InventoryResponse>("/api/inventory/import/csv", { method: "POST", body });
+  },
+  importExcel: async (file: File) => {
+    const body = new FormData();
+    body.append("file", file);
+    return request<InventoryResponse>("/api/inventory/import/excel", { method: "POST", body });
+  },
+  getPlanner: (target: string, maxDepth: number) =>
+    request<PlannerResponse>("/api/results/planner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target, max_depth: maxDepth }),
+    }),
+  getShoppingList: (targets: Array<{ item: string; qty: number }>, maxDepth: number) =>
+    request<ShoppingListResponse>("/api/results/shopping-list", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targets, max_depth: maxDepth }),
+    }),
+};

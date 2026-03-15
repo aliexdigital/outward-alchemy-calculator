@@ -5,7 +5,10 @@ from typing import Dict
 
 import pandas as pd
 
-from crafting_core import key, normalize
+try:
+    from .crafting_core import key, normalize
+except ImportError:  # pragma: no cover - supports running src/app.py directly
+    from crafting_core import key, normalize
 
 
 def counts_from_text(raw: str) -> Counter:

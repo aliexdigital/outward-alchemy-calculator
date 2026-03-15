@@ -1,0 +1,395 @@
+.app-shell {
+  width: min(1860px, calc(100vw - 2rem));
+  margin: 0 auto;
+  padding: 1rem 0 1.4rem;
+  display: grid;
+  grid-template-columns: var(--rail-width) minmax(0, 1fr) var(--results-width);
+  gap: var(--shell-gap);
+  align-items: start;
+}
+
+.app-shell.left-collapsed {
+  grid-template-columns: var(--rail-collapsed-width) minmax(0, 1fr) var(--results-width);
+}
+
+.loading-shell {
+  display: block;
+  padding: 2rem;
+}
+
+.utility-rail,
+.main-column,
+.results-rail {
+  min-width: 0;
+}
+
+.utility-rail {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+
+.rail-scroll {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.rail-toggle {
+  width: 100%;
+  min-height: 2rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel-soft);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.rail-header {
+  padding: 0.2rem 0.2rem 0;
+}
+
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+.rail-header h2,
+.panel-header h2,
+.hero-card h1 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+.rail-header p,
+.panel-header p,
+.hero-card p,
+.info-strip,
+.helper-list,
+.empty-state {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.hero-card {
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.7rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, rgba(34, 19, 42, 0.92), rgba(24, 15, 31, 0.96));
+  box-shadow: var(--shadow);
+}
+
+.hero-card h1 {
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+}
+
+.hero-card p:last-child {
+  margin-top: 0.3rem;
+  max-width: 60rem;
+}
+
+.mode-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.nav-pill,
+.chip,
+.button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.nav-pill,
+.chip,
+.button.subtle {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
+
+.nav-pill {
+  padding: 0.42rem 0.8rem;
+}
+
+.nav-pill.active,
+.chip.active,
+.button.primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+  border-color: var(--border-strong);
+  color: white;
+}
+
+.main-column,
+.results-rail {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  padding: 0.8rem 0.95rem;
+}
+
+.inline-overview {
+  margin-bottom: 0.85rem;
+}
+
+.panel-header {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.65rem;
+}
+
+.inventory-overview-row,
+.quick-add-row,
+.toolbar-row,
+.inline-actions,
+.split-columns {
+  display: flex;
+  gap: 0.7rem;
+  align-items: end;
+}
+
+.inventory-overview-row {
+  align-items: stretch;
+}
+
+.split-columns {
+  align-items: start;
+  margin-bottom: 0.7rem;
+}
+
+.split-columns > * {
+  flex: 1;
+}
+
+.field {
+  display: grid;
+  gap: 0.24rem;
+}
+
+.field.grow {
+  flex: 1;
+}
+
+.field span,
+.toolbar-label {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.field input,
+.field select,
+.bulk-text,
+.qty-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  color: var(--text);
+  padding: 0.6rem 0.7rem;
+}
+
+.quantity-field {
+  width: 5.3rem;
+}
+
+.button {
+  padding: 0.58rem 0.86rem;
+  font-weight: 600;
+}
+
+.button.primary {
+  min-width: 5.5rem;
+}
+
+.button.tiny {
+  padding: 0.3rem 0.55rem;
+}
+
+.file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.toolbar-row {
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.toolbar-categories {
+  display: grid;
+  gap: 0.35rem;
+  flex: 1;
+}
+
+.chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.chip {
+  padding: 0.18rem 0.5rem;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.owned-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.table-shell {
+  overflow: auto;
+  border: 1px solid rgba(169, 86, 255, 0.12);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.ingredient-table-shell {
+  max-height: 28rem;
+}
+
+.recipe-database-shell {
+  max-height: 32rem;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid rgba(169, 86, 255, 0.1);
+  vertical-align: top;
+}
+
+.data-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(22, 14, 28, 0.98);
+  text-align: left;
+}
+
+.qty-input {
+  max-width: 5rem;
+  padding: 0.35rem 0.45rem;
+}
+
+.stat-grid {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.stat-grid.four-up {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat-grid.two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.stat-grid.one-up {
+  grid-template-columns: 1fr;
+}
+
+.compact-grid {
+  margin-top: 0.45rem;
+}
+
+.stat-card {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.65rem 0.7rem;
+  background: linear-gradient(180deg, rgba(55, 27, 66, 0.96), rgba(34, 20, 42, 0.98));
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+}
+
+.stat-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.stat-value {
+  font-size: 1.05rem;
+}
+
+.info-strip,
+.empty-state,
+.error-banner,
+.helper-list,
+.mini-table,
+.code-block {
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.error-banner {
+  color: #ffd4e9;
+  border: 1px solid rgba(255, 111, 180, 0.35);
+}
+
+.helper-list {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.helper-list li {
+  margin-left: 1rem;
+}
+
+.bulk-text,
+.code-block {
+  min-height: 8rem;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1280px) {
+  .app-shell,
+  .app-shell.left-collapsed {
+    grid-template-columns: 1fr;
+  }
+
+  .utility-rail {
+    position: static;
+  }
+
+  .split-columns,
+  .inventory-overview-row,
+  .quick-add-row,
+  .toolbar-row,
+  .inline-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stat-grid.four-up,
+  .stat-grid.two-up {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
