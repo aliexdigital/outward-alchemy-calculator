@@ -180,6 +180,32 @@ def test_missing_threshold_query_changes_near_results() -> None:
     assert any(row["result"] == "Cool Potion" for row in near_one["items"])
 
 
+def test_dashboard_endpoint_returns_shared_panel_payload() -> None:
+    client = make_client()
+
+    client.post("/api/inventory/items/add", json={"item": "Clean Water", "qty": 1}).raise_for_status()
+    client.post("/api/inventory/items/add", json={"item": "Gravel Beetle", "qty": 1}).raise_for_status()
+
+    dashboard = client.get("/api/results/dashboard?stations=Alchemy+Kit&max_missing_slots=1").json()
+
+    assert dashboard["inventory"]["items"] == [{"item": "Clean Water", "qty": 1}, {"item": "Gravel Beetle", "qty": 1}]
+    assert "snapshot" in dashboard
+    assert dashboard["best_direct"]["items"]
+    assert dashboard["near"]["items"]
+
+
+def test_near_results_include_missing_summary_fields() -> None:
+    client = make_client()
+
+    client.post("/api/inventory/items/add", json={"item": "Gravel Beetle", "qty": 1}).raise_for_status()
+
+    near = client.get("/api/results/near?stations=Alchemy+Kit&max_missing_slots=1&limit=20").json()
+    cool_potion = result_map(near["items"])["Cool Potion"]
+
+    assert cool_potion["missing_items"] == "Water (Clean Water, Salt Water, Rancid Water, Leyline Water)"
+    assert cool_potion["station"] == "Alchemy Kit"
+
+
 def test_metadata_exposes_recipe_database_groups_and_item_stats() -> None:
     client = make_client()
 

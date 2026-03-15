@@ -247,24 +247,49 @@ class CalculatorService:
         ].copy()
         return filtered, craftable, near
 
-    def overview(self, stations: Optional[List[str]] = None, max_missing_slots: int = 2) -> dict:
-        inventory = self.get_inventory()
+    def _snapshot_payload(self, filtered: pd.DataFrame, craftable: pd.DataFrame, near: pd.DataFrame, inventory: Counter) -> dict:
         inventory_df = inventory_ops.inventory_table_df(inventory)
-        filtered, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
         top_heal = craftable.sort_values(["healing_total", "result"], ascending=[False, True]).head(1)
         top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[False, True]).head(1)
         top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
         return {
+            "inventory_lines": len(inventory_df),
+            "known_recipes": len(filtered),
+            "direct_crafts": len(craftable),
+            "near_crafts": len(near),
+            "best_heal": top_heal.iloc[0]["result"] if not top_heal.empty and top_heal.iloc[0]["healing_total"] > 0 else None,
+            "best_stamina": top_stamina.iloc[0]["result"] if not top_stamina.empty and top_stamina.iloc[0]["stamina_total"] > 0 else None,
+            "best_mana": top_mana.iloc[0]["result"] if not top_mana.empty and top_mana.iloc[0]["mana_total"] > 0 else None,
+        }
+
+    def overview(self, stations: Optional[List[str]] = None, max_missing_slots: int = 2) -> dict:
+        inventory = self.get_inventory()
+        filtered, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
+        inventory_df = inventory_ops.inventory_table_df(inventory)
+        return {
             "inventory": self.get_inventory_response(),
             "inventory_table": _df_records(inventory_df),
-            "snapshot": {
-                "inventory_lines": len(inventory_df),
+            "snapshot": self._snapshot_payload(filtered, craftable, near, inventory),
+        }
+
+    def dashboard(self, stations: Optional[List[str]] = None, max_missing_slots: int = 2) -> dict:
+        inventory = self.get_inventory()
+        filtered, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
+        best_direct = order_craftable_results(craftable, "Smart score") if not craftable.empty else craftable
+        near_ordered = near.sort_values(["missing_slots", "matched_slots", "result"], ascending=[True, False, True]) if not near.empty else near
+        return {
+            "inventory": self.get_inventory_response(),
+            "snapshot": self._snapshot_payload(filtered, craftable, near, inventory),
+            "best_direct": {
+                "sort_mode": "Smart score",
+                "count": len(craftable),
+                "near_count": len(near),
+                "items": _df_records(best_direct.head(8)),
+            },
+            "near": {
+                "count": len(near),
                 "known_recipes": len(filtered),
-                "direct_crafts": len(craftable),
-                "near_crafts": len(near),
-                "best_heal": top_heal.iloc[0]["result"] if not top_heal.empty and top_heal.iloc[0]["healing_total"] > 0 else None,
-                "best_stamina": top_stamina.iloc[0]["result"] if not top_stamina.empty and top_stamina.iloc[0]["stamina_total"] > 0 else None,
-                "best_mana": top_mana.iloc[0]["result"] if not top_mana.empty and top_mana.iloc[0]["mana_total"] > 0 else None,
+                "items": _df_records(near_ordered.head(30)),
             },
         }
 

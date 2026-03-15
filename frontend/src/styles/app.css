@@ -1,7 +1,15 @@
-.app-shell {
+.app-page {
   width: min(1860px, calc(100vw - 2rem));
   margin: 0 auto;
-  padding: 1.05rem 0 1.45rem;
+  padding: 0.85rem 0 1.45rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
+.app-shell {
+  width: 100%;
+  margin: 0;
+  padding: 0;
   display: grid;
   grid-template-columns: var(--rail-width) minmax(0, 1fr) var(--results-width);
   gap: var(--shell-gap);
@@ -15,7 +23,11 @@
 
 .loading-shell {
   display: block;
-  padding: 2rem;
+  padding: 2rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-panel);
+  box-shadow: var(--shadow);
 }
 
 .utility-rail,
@@ -85,14 +97,14 @@
 
 .rail-header h2,
 .panel-header h2,
-.hero-card h1 {
+.app-banner h1 {
   margin: 0;
   font-family: var(--font-display);
 }
 
 .rail-header p,
 .panel-header p,
-.hero-card p,
+.app-banner p,
 .info-strip,
 .helper-list,
 .empty-state {
@@ -100,29 +112,29 @@
   color: var(--text-muted);
 }
 
-.hero-card {
+.app-banner {
   position: relative;
   overflow: hidden;
   display: grid;
-  gap: 0.32rem;
+  gap: 0.28rem;
   align-content: end;
-  min-height: 9.25rem;
-  padding: 1.45rem 1.35rem 1.25rem;
-  margin-bottom: 0.5rem;
+  min-height: 10.4rem;
+  padding: 1.65rem 1.55rem 1.28rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background:
-    radial-gradient(circle at 88% 18%, rgba(255, 99, 191, 0.16), transparent 22%),
+    radial-gradient(circle at 88% 18%, rgba(255, 99, 191, 0.18), transparent 22%),
+    radial-gradient(circle at 12% 0%, rgba(118, 73, 255, 0.12), transparent 28%),
     linear-gradient(180deg, rgba(34, 19, 42, 0.92), rgba(24, 15, 31, 0.96));
   box-shadow: var(--shadow);
 }
 
-.hero-card h1 {
-  font-size: clamp(1.8rem, 3vw, 2.7rem);
+.app-banner h1 {
+  font-size: clamp(2.05rem, 3.4vw, 3rem);
 }
 
-.hero-card p:last-child {
-  max-width: 48rem;
+.app-banner p:last-child {
+  max-width: 52rem;
 }
 
 .mode-shell {
@@ -150,6 +162,13 @@
   color: var(--text-muted);
 }
 
+.panel-header-row {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 0.55rem;
+}
+
 .mode-info {
   display: inline-grid;
   place-items: center;
@@ -161,6 +180,22 @@
   color: var(--text-soft);
   font-size: 0.72rem;
   font-weight: 700;
+}
+
+.panel-toggle {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 99, 191, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.collapsible-panel.collapsed .panel-header {
+  margin-bottom: 0;
 }
 
 .nav-pill,
@@ -261,6 +296,15 @@
   display: grid;
   gap: 0.45rem;
   background: rgba(255, 255, 255, 0.025);
+}
+
+.inventory-editor {
+  display: grid;
+  gap: 0.58rem;
+  padding: 0.68rem;
+  border: 1px solid rgba(169, 86, 255, 0.12);
+  border-radius: var(--radius-md);
+  background: rgba(18, 11, 23, 0.32);
 }
 
 .quick-add-row {
@@ -539,23 +583,26 @@
   font-weight: 700;
 }
 
+.missing-summary {
+  color: var(--accent-soft);
+  font-weight: 700;
+}
+
 .table-note {
   margin-top: 0.18rem;
   font-size: 0.82rem;
   color: var(--text-soft);
 }
 
-.near-table td:nth-child(2),
-.near-table td:nth-child(3) {
-  min-width: 8.5rem;
-}
-
-.near-table-compact .near-table td:nth-child(2),
-.near-table-compact .near-table td:nth-child(3) {
-  min-width: 6.5rem;
+.near-table td:nth-child(2) {
+  min-width: 11rem;
 }
 
 @media (max-width: 1280px) {
+  .app-page {
+    width: min(100vw - 1rem, 1860px);
+  }
+
   .app-shell,
   .app-shell.left-collapsed {
     grid-template-columns: 1fr;
@@ -581,6 +628,11 @@
 
   .mode-note {
     align-items: start;
+  }
+
+  .app-banner {
+    min-height: auto;
+    padding: 1.25rem 1rem 1rem;
   }
 
   .stat-grid.four-up,

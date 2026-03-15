@@ -1,9 +1,10 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { api } from "./api";
 import rawPlanningControls from "./planning-controls.json";
 import rawViewConfig from "./view-config.json";
 import type {
+  DashboardResponse,
   DirectResponse,
   IngredientGroup,
   InventoryItem,
@@ -11,10 +12,10 @@ import type {
   ItemStat,
   MetadataResponse,
   NearResponse,
-  OverviewResponse,
   PlannerResponse,
   RecipeDatabaseRecord,
   RecipeResult,
+  Snapshot,
   ShoppingListResponse,
 } from "./types";
 
@@ -45,6 +46,8 @@ type PlanningControlEntry = {
   summary: string;
   affects: string[];
 };
+
+type RailSectionId = "snapshot" | "planning" | "how" | "bulk" | "data";
 
 const VIEW_CONFIG = rawViewConfig as ViewConfigEntry[];
 const PLANNING_CONTROLS = rawPlanningControls as PlanningControlEntry[];
@@ -118,19 +121,39 @@ function Panel({
   description,
   children,
   className,
+  collapsible = false,
+  collapsed = false,
+  onToggle,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
   className?: string;
+  collapsible?: boolean;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }) {
   return (
-    <section className={classNames("panel", className)}>
-      <header className="panel-header">
-        <h2>{title}</h2>
-        {description ? <p>{description}</p> : null}
-      </header>
-      {children}
+    <section className={classNames("panel", collapsible && "collapsible-panel", collapsed && "collapsed", className)}>
+      <div className="panel-header-row">
+        <header className="panel-header">
+          <h2>{title}</h2>
+          {description && !(collapsible && collapsed) ? <p>{description}</p> : null}
+        </header>
+        {collapsible ? (
+          <button
+            type="button"
+            className="panel-toggle"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+            title={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+          >
+            {collapsed ? "+" : "-"}
+          </button>
+        ) : null}
+      </div>
+      {!collapsed ? children : null}
     </section>
   );
 }
@@ -194,8 +217,7 @@ function NearCraftTable({
         <thead>
           <tr>
             <th>Recipe</th>
-            <th>{compact ? "Need" : "Near status"}</th>
-            <th>{compact ? "Slots" : "Still missing"}</th>
+            <th>Still missing</th>
             <th>Station</th>
           </tr>
         </thead>
@@ -206,21 +228,14 @@ function NearCraftTable({
               <tr key={`${row.result}-${row.station}-${row.ingredients}`}>
                 <td>
                   <div className="near-result-name">{row.result}</div>
-                  {!compact ? <div className="table-note">{row.ingredients}</div> : null}
+                  <div className="table-note">
+                    {compact ? `${row.matched_slots}/${totalSlots} ready` : row.ingredients}
+                  </div>
                 </td>
                 <td>
-                  {compact ? (
-                    row.missing_items || "See details"
-                  ) : (
-                    <>
-                      <div>{slotLabel(row.missing_slots)}</div>
-                      <div className="table-note">
-                        {row.matched_slots}/{totalSlots} slots ready
-                      </div>
-                    </>
-                  )}
+                  <div className="missing-summary">{row.missing_items || "Nothing listed"}</div>
+                  <div className="table-note">{slotLabel(row.missing_slots)}</div>
                 </td>
-                <td>{compact ? slotLabel(row.missing_slots) : row.missing_items || "Nothing listed"}</td>
                 <td>{row.station}</td>
               </tr>
             );
@@ -373,7 +388,7 @@ function ItemStatsTable({
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null);
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
-  const [overview, setOverview] = useState<OverviewResponse | null>(null);
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [bestDirect, setBestDirect] = useState<DirectResponse | null>(null);
   const [craftNow, setCraftNow] = useState<DirectResponse | null>(null);
   const [near, setNear] = useState<NearResponse | null>(null);
@@ -381,6 +396,13 @@ export default function App() {
   const [shoppingResult, setShoppingResult] = useState<ShoppingListResponse | null>(null);
   const [activeSection, setActiveSection] = useState<NavItem>("Craft now");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [railSections, setRailSections] = useState<Record<RailSectionId, boolean>>({
+    snapshot: true,
+    planning: true,
+    how: false,
+    bulk: true,
+    data: false,
+  });
   const [selectedStations, setSelectedStations] = useState<string[]>([]);
   const [plannerDepth, setPlannerDepth] = useState(5);
   const [nearThreshold, setNearThreshold] = useState(2);
@@ -404,23 +426,38 @@ export default function App() {
   const deferredQuickAddValue = useDeferredValue(quickAddValue);
   const deferredDatabaseSearch = useDeferredValue(databaseSearch);
 
-  const refreshDashboard = useCallback(
-    async (stations: string[], currentSortMode: string, currentNearThreshold: number) => {
-      const [inventoryData, overviewData, bestDirectData, craftNowData, nearData] = await Promise.all([
-        api.getInventory(),
-        api.getOverview(stations, currentNearThreshold),
-        api.getDirect("Smart score", stations, 8, currentNearThreshold),
-        api.getDirect(currentSortMode, stations, 24, currentNearThreshold),
-        api.getNear(stations, 30, currentNearThreshold),
-      ]);
-      setInventory(inventoryData);
-      setOverview(overviewData);
-      setBestDirect(bestDirectData);
+  const refreshSharedPanels = useCallback(async (stations: string[], currentNearThreshold: number) => {
+    const dashboardData = await api.getDashboard(stations, currentNearThreshold);
+    startTransition(() => {
+      setInventory(dashboardData.inventory);
+      setSnapshot(dashboardData.snapshot);
+      setBestDirect(dashboardData.best_direct);
+      setNear(dashboardData.near);
+    });
+  }, []);
+
+  const refreshCraftNow = useCallback(async (stations: string[], currentSortMode: string, currentNearThreshold: number) => {
+    const craftNowData = await api.getDirect(currentSortMode, stations, 24, currentNearThreshold);
+    startTransition(() => {
       setCraftNow(craftNowData);
-      setNear(nearData);
-    },
-    [],
-  );
+    });
+  }, []);
+
+  const toggleRailSection = useCallback((sectionId: RailSectionId) => {
+    setRailSections((current) => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  }, []);
+
+  const applyDashboard = useCallback((dashboardData: DashboardResponse) => {
+    startTransition(() => {
+      setInventory(dashboardData.inventory);
+      setSnapshot(dashboardData.snapshot);
+      setBestDirect(dashboardData.best_direct);
+      setNear(dashboardData.near);
+    });
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
@@ -440,7 +477,9 @@ export default function App() {
         setDatabaseCategories(nextRecipeCategories);
         setPlanTarget(recipeTargets[0] ?? "");
 
-        await refreshDashboard(nextStations, "Smart score", 2);
+        const dashboardData = await api.getDashboard(nextStations, 2);
+        applyDashboard(dashboardData);
+        await refreshCraftNow(nextStations, "Smart score", 2);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load app data.");
       } finally {
@@ -449,14 +488,21 @@ export default function App() {
     }
 
     void bootstrap();
-  }, [refreshDashboard]);
+  }, [applyDashboard, refreshCraftNow]);
 
   useEffect(() => {
     if (!metadata) return;
-    void refreshDashboard(selectedStations, sortMode, nearThreshold).catch((err) => {
+    void refreshSharedPanels(selectedStations, nearThreshold).catch((err) => {
       setError(err instanceof Error ? err.message : "Failed to refresh calculator results.");
     });
-  }, [metadata, nearThreshold, refreshDashboard, selectedStations, sortMode]);
+  }, [metadata, nearThreshold, refreshSharedPanels, selectedStations]);
+
+  useEffect(() => {
+    if (!metadata || activeSection !== "Craft now") return;
+    void refreshCraftNow(selectedStations, sortMode, nearThreshold).catch((err) => {
+      setError(err instanceof Error ? err.message : "Failed to refresh the craftable list.");
+    });
+  }, [activeSection, metadata, nearThreshold, refreshCraftNow, selectedStations, sortMode]);
 
   const inventorySignature = useMemo(
     () => (inventory?.items ?? []).map((item) => `${item.item}:${item.qty}`).join("|"),
@@ -574,16 +620,22 @@ export default function App() {
   }, [executeShoppingList, inventorySignature, shoppingRequested]);
 
   const handleInventoryMutation = useCallback(
-    async (operation: Promise<unknown>) => {
+    async (operation: Promise<InventoryResponse>) => {
       try {
         setError(null);
-        await operation;
-        await refreshDashboard(selectedStations, sortMode, nearThreshold);
+        const nextInventory = await operation;
+        startTransition(() => {
+          setInventory(nextInventory);
+        });
+        await Promise.all([
+          refreshSharedPanels(selectedStations, nearThreshold),
+          activeSection === "Craft now" ? refreshCraftNow(selectedStations, sortMode, nearThreshold) : Promise.resolve(),
+        ]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Inventory update failed.");
       }
     },
-    [nearThreshold, refreshDashboard, selectedStations, sortMode],
+    [activeSection, nearThreshold, refreshCraftNow, refreshSharedPanels, selectedStations, sortMode],
   );
 
   const handleQuickAdd = async (event: React.FormEvent) => {
@@ -628,12 +680,23 @@ export default function App() {
   };
 
   if (isLoading) {
-    return <main className="app-shell loading-shell">Loading the crafting calculator...</main>;
+    return (
+      <main className="app-page">
+        <div className="loading-shell">Loading the crafting calculator...</div>
+      </main>
+    );
   }
 
   return (
-    <main className={classNames("app-shell", leftCollapsed && "left-collapsed")}>
-      <aside className="utility-rail">
+    <main className="app-page">
+      <header className="app-banner">
+        <p className="eyebrow">Outward crafting helper</p>
+        <h1>Alie&apos;s Outward Crafting</h1>
+        <p>Craft, plan, shop, and browse recipes from one live inventory.</p>
+      </header>
+
+      <div className={classNames("app-shell", leftCollapsed && "left-collapsed")}>
+        <aside className="utility-rail">
         <button
           className="rail-toggle"
           type="button"
@@ -651,21 +714,33 @@ export default function App() {
               <p>Live totals, filters, and imports.</p>
             </header>
 
-            <Panel title="Snapshot" description="Live totals from your inventory.">
+            <Panel
+              title="Snapshot"
+              description="Live totals from your inventory."
+              collapsible
+              collapsed={!railSections.snapshot}
+              onToggle={() => toggleRailSection("snapshot")}
+            >
               <div className="stat-grid two-up">
-                <StatCard label="Inventory lines" value={overview?.snapshot.inventory_lines ?? 0} />
-                <StatCard label="Known recipes" value={overview?.snapshot.known_recipes ?? 0} />
-                <StatCard label="Direct crafts" value={overview?.snapshot.direct_crafts ?? 0} />
-                <StatCard label="Near crafts" value={overview?.snapshot.near_crafts ?? 0} />
+                <StatCard label="Inventory lines" value={snapshot?.inventory_lines ?? 0} />
+                <StatCard label="Known recipes" value={snapshot?.known_recipes ?? 0} />
+                <StatCard label="Direct crafts" value={snapshot?.direct_crafts ?? 0} />
+                <StatCard label="Near crafts" value={snapshot?.near_crafts ?? 0} />
               </div>
               <div className="stat-grid one-up compact-grid">
-                <StatCard label="Best heal" value={overview?.snapshot.best_heal ?? null} />
-                <StatCard label="Best stamina" value={overview?.snapshot.best_stamina ?? null} />
-                <StatCard label="Best mana" value={overview?.snapshot.best_mana ?? null} />
+                <StatCard label="Best heal" value={snapshot?.best_heal ?? null} />
+                <StatCard label="Best stamina" value={snapshot?.best_stamina ?? null} />
+                <StatCard label="Best mana" value={snapshot?.best_mana ?? null} />
               </div>
             </Panel>
 
-            <Panel title="Planning tools" description="These settings shape crafting, near-craft, and planning views.">
+            <Panel
+              title="Planning tools"
+              description="These settings shape crafting, near-craft, and planning views."
+              collapsible
+              collapsed={!railSections.planning}
+              onToggle={() => toggleRailSection("planning")}
+            >
               <label className="field">
                 <span>Planner depth</span>
                 <input type="range" min={1} max={8} value={plannerDepth} onChange={(event) => setPlannerDepth(Number(event.target.value))} />
@@ -707,14 +782,20 @@ export default function App() {
               </div>
             </Panel>
 
-            <Panel title="How this works">
+            <Panel title="How this works" collapsible collapsed={!railSections.how} onToggle={() => toggleRailSection("how")}>
               <ul className="helper-list">
                 <li>One inventory powers every panel.</li>
                 <li>Imports, edits, planner, and shopping stay in sync.</li>
               </ul>
             </Panel>
 
-            <Panel title="Bulk add inventory" description="Paste text or upload CSV / Excel.">
+            <Panel
+              title="Bulk add inventory"
+              description="Paste text or upload CSV / Excel."
+              collapsible
+              collapsed={!railSections.bulk}
+              onToggle={() => toggleRailSection("bulk")}
+            >
               <textarea
                 className="bulk-text compact-text"
                 value={bulkText}
@@ -736,7 +817,7 @@ export default function App() {
               </div>
             </Panel>
 
-            <Panel title="Data details">
+            <Panel title="Data details" collapsible collapsed={!railSections.data} onToggle={() => toggleRailSection("data")}>
               <div className="helper-list">
                 <div>Recipes: {metadata?.recipe_count ?? 0}</div>
                 <div>Categories: {metadata?.categories.length ?? 0}</div>
@@ -750,14 +831,9 @@ export default function App() {
             <span>Tools</span>
           </div>
         )}
-      </aside>
+        </aside>
 
-      <section className="main-column">
-        <header className="hero-card">
-          <p className="eyebrow">Outward crafting helper</p>
-          <h1>Alie&apos;s Outward Crafting</h1>
-          <p>Craft, plan, shop, and browse recipes from one live inventory.</p>
-        </header>
+        <section className="main-column">
 
         <section className="mode-shell">
           <nav className="mode-nav">
@@ -805,133 +881,135 @@ export default function App() {
             </div>
           </Panel>
 
-          <form className="quick-add-row control-strip" onSubmit={(event) => void handleQuickAdd(event)}>
-            <label className="field grow">
-              <span>Search items</span>
-              <input
-                list="ingredient-options"
-                value={quickAddValue}
-                onChange={(event) => setQuickAddValue(event.target.value)}
-                placeholder="Find an ingredient..."
-              />
-              <datalist id="ingredient-options">
-                {metadata?.ingredients.map((ingredient) => (
-                  <option key={ingredient} value={ingredient} />
-                ))}
-              </datalist>
-            </label>
-            <label className="field quantity-field">
-              <span>Qty</span>
-              <input
-                type="number"
-                min={1}
-                value={quickQty}
-                onChange={(event) => setQuickQty(Math.max(1, Number(event.target.value) || 1))}
-              />
-            </label>
-            <button type="submit" className="button primary">
-              Add
-            </button>
-          </form>
+          <div className="inventory-editor">
+            <form className="quick-add-row control-strip" onSubmit={(event) => void handleQuickAdd(event)}>
+              <label className="field grow">
+                <span>Search items</span>
+                <input
+                  list="ingredient-options"
+                  value={quickAddValue}
+                  onChange={(event) => setQuickAddValue(event.target.value)}
+                  placeholder="Find an ingredient..."
+                />
+                <datalist id="ingredient-options">
+                  {metadata?.ingredients.map((ingredient) => (
+                    <option key={ingredient} value={ingredient} />
+                  ))}
+                </datalist>
+              </label>
+              <label className="field quantity-field">
+                <span>Qty</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={quickQty}
+                  onChange={(event) => setQuickQty(Math.max(1, Number(event.target.value) || 1))}
+                />
+              </label>
+              <button type="submit" className="button primary">
+                Add
+              </button>
+            </form>
 
-          <div className="toolbar-row control-strip toolbar-strip">
-            <div className="toolbar-categories">
-              <span className="toolbar-label">Categories</span>
-              <div className="chip-group">
-                {metadata?.categories.map((category) => {
-                  const active = selectedCategories.includes(category.name);
-                  return (
-                    <button
-                      key={category.name}
-                      type="button"
-                      className={classNames("chip", active && "active")}
-                      onClick={() => setSelectedCategories((current) => toggleSelection(current, category.name))}
-                    >
-                      {category.name}
-                    </button>
-                  );
-                })}
+            <div className="toolbar-row control-strip toolbar-strip">
+              <div className="toolbar-categories">
+                <span className="toolbar-label">Categories</span>
+                <div className="chip-group">
+                  {metadata?.categories.map((category) => {
+                    const active = selectedCategories.includes(category.name);
+                    return (
+                      <button
+                        key={category.name}
+                        type="button"
+                        className={classNames("chip", active && "active")}
+                        onClick={() => setSelectedCategories((current) => toggleSelection(current, category.name))}
+                      >
+                        {category.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+              <label className="owned-toggle">
+                <input
+                  type="checkbox"
+                  checked={showOwnedOnly}
+                  onChange={(event) => setShowOwnedOnly(event.target.checked)}
+                />
+                <span>Owned only</span>
+              </label>
+              <button type="button" className="button subtle" onClick={() => void handleInventoryMutation(api.replaceInventory([]))}>
+                Clear
+              </button>
             </div>
-            <label className="owned-toggle">
-              <input
-                type="checkbox"
-                checked={showOwnedOnly}
-                onChange={(event) => setShowOwnedOnly(event.target.checked)}
-              />
-              <span>Owned only</span>
-            </label>
-            <button type="button" className="button subtle" onClick={() => void handleInventoryMutation(api.replaceInventory([]))}>
-              Clear
-            </button>
-          </div>
 
-          {filteredCatalogRows.length ? (
-            <>
-              <div className="info-strip inventory-table-note">Edit qty, then Apply. Remove clears the item.</div>
-              <div className="table-shell ingredient-table-shell">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Have it</th>
-                      <th>Ingredient</th>
-                      <th>Category</th>
-                      <th>Qty</th>
-                      <th>Apply</th>
-                      <th>Remove</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCatalogRows.map((row) => {
-                      const currentQty = inventoryMap.get(row.item) ?? 0;
-                      const draftValue = draftQuantities[row.item] ?? String(currentQty);
-                      return (
-                        <tr key={row.item}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={currentQty > 0}
-                              onChange={(event) =>
-                                void handleInventoryMutation(api.setInventoryItem(row.item, event.target.checked ? Math.max(currentQty, 1) : 0))
-                              }
-                            />
-                          </td>
-                          <td>{row.item}</td>
-                          <td>{row.category}</td>
-                          <td>
-                            <input
-                              className="qty-input"
-                              type="number"
-                              min={0}
-                              value={draftValue}
-                              onChange={(event) =>
-                                setDraftQuantities((current) => ({
-                                  ...current,
-                                  [row.item]: event.target.value,
-                                }))
-                              }
-                            />
-                          </td>
-                          <td>
-                            <button type="button" className="button subtle tiny" onClick={() => void applyInventoryQty(row.item)}>
-                              Apply
-                            </button>
-                          </td>
-                          <td>
-                            <button type="button" className="button subtle tiny" onClick={() => void removeInventoryItem(row.item)}>
-                              Remove
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <div className="empty-state">No ingredients match the current search and category filters.</div>
-          )}
+            {filteredCatalogRows.length ? (
+              <>
+                <div className="info-strip inventory-table-note">Edit qty, then Apply. Remove clears the item.</div>
+                <div className="table-shell ingredient-table-shell">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Have it</th>
+                        <th>Ingredient</th>
+                        <th>Category</th>
+                        <th>Qty</th>
+                        <th>Apply</th>
+                        <th>Remove</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredCatalogRows.map((row) => {
+                        const currentQty = inventoryMap.get(row.item) ?? 0;
+                        const draftValue = draftQuantities[row.item] ?? String(currentQty);
+                        return (
+                          <tr key={row.item}>
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={currentQty > 0}
+                                onChange={(event) =>
+                                  void handleInventoryMutation(api.setInventoryItem(row.item, event.target.checked ? Math.max(currentQty, 1) : 0))
+                                }
+                              />
+                            </td>
+                            <td>{row.item}</td>
+                            <td>{row.category}</td>
+                            <td>
+                              <input
+                                className="qty-input"
+                                type="number"
+                                min={0}
+                                value={draftValue}
+                                onChange={(event) =>
+                                  setDraftQuantities((current) => ({
+                                    ...current,
+                                    [row.item]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </td>
+                            <td>
+                              <button type="button" className="button subtle tiny" onClick={() => void applyInventoryQty(row.item)}>
+                                Apply
+                              </button>
+                            </td>
+                            <td>
+                              <button type="button" className="button subtle tiny" onClick={() => void removeInventoryItem(row.item)}>
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <div className="empty-state">No ingredients match the current search and category filters.</div>
+            )}
+          </div>
 
           <div className="stat-grid four-up">
             <StatCard label="Categories shown" value={(selectedCategories.length || metadata?.categories.length) ?? 0} />
@@ -942,7 +1020,7 @@ export default function App() {
         </Panel>
 
         {activeSection === "Craft now" ? (
-          <Panel title="What you can craft right now" description="Direct crafts from your current inventory.">
+          <Panel title="Full craftable list" description="All direct crafts for the current filters.">
             <div className="inline-actions">
               <label className="field inline-field grow">
                 <span>Sort results by</span>
@@ -1144,9 +1222,9 @@ export default function App() {
             </div>
           </Panel>
         ) : null}
-      </section>
+        </section>
 
-      <aside className="results-rail">
+        <aside className="results-rail">
         <Panel title="Best direct options" description="Top direct results for the current filters.">
           <div className="stat-grid two-up">
             <StatCard label="Direct crafts" value={bestDirect?.count ?? 0} />
@@ -1174,19 +1252,8 @@ export default function App() {
             emptyMessage="No recipes are currently inside the selected near-craft threshold."
           />
         </Panel>
-
-        <Panel title="What you can craft right now" description="Live craftable list from your current inventory.">
-          <RecipeTable
-            rows={craftNow?.items ?? []}
-            columns={[
-              { key: "result", label: "Item" },
-              { key: "max_total_output", label: "Output" },
-              { key: "station", label: "Station" },
-            ]}
-            emptyMessage="No craftable recipes match the current inventory and station filters."
-          />
-        </Panel>
-      </aside>
+        </aside>
+      </div>
     </main>
   );
 }

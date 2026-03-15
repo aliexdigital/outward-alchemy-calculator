@@ -1,4 +1,5 @@
 import type {
+  DashboardResponse,
   DirectResponse,
   InventoryResponse,
   MetadataResponse,
@@ -22,6 +23,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getMetadata: () => request<MetadataResponse>("/api/metadata"),
   getInventory: () => request<InventoryResponse>("/api/inventory"),
+  getDashboard: (stations: string[], maxMissingSlots = 2) => {
+    const params = new URLSearchParams();
+    params.set("max_missing_slots", String(maxMissingSlots));
+    stations.forEach((station) => params.append("stations", station));
+    return request<DashboardResponse>(`/api/results/dashboard?${params.toString()}`);
+  },
   getOverview: (stations: string[], maxMissingSlots = 2) => {
     const params = new URLSearchParams();
     params.set("max_missing_slots", String(maxMissingSlots));

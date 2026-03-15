@@ -66,6 +66,13 @@ def create_app() -> FastAPI:
     ) -> dict:
         return app.state.service.overview(stations, max_missing_slots=max_missing_slots)
 
+    @app.get("/api/results/dashboard")
+    def results_dashboard(
+        stations: Optional[List[str]] = Query(default=None),
+        max_missing_slots: int = Query(default=2, ge=1, le=4),
+    ) -> dict:
+        return app.state.service.dashboard(stations, max_missing_slots=max_missing_slots)
+
     @app.get("/api/results/direct")
     def results_direct(
         sort_mode: str = Query(default="Smart score"),

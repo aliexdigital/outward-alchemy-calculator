@@ -414,25 +414,72 @@ def count_missing_slots(
     return missing_count, missing
 
 
-def smart_score(row: pd.Series) -> float:
-    name = key(row["result"])
+def _effects_list(effects: str) -> List[str]:
+    return [normalize(effect) for effect in str(effects or "").split(";") if normalize(effect)]
+
+
+def _station_convenience(station: str) -> float:
+    return {
+        "Manual Crafting": 1.8,
+        "Campfire": 1.4,
+        "Cooking Pot": 0.9,
+        "Alchemy Kit": 0.5,
+    }.get(normalize_station(station), 0.7)
+
+
+def _category_utility(category: str) -> float:
+    return {
+        "Potion": 7.5,
+        "Tea": 6.0,
+        "Potions and Drinks": 6.0,
+        "Food": 5.0,
+        "Alchemy": 3.0,
+        "Equipment": 2.0,
+        "Cooking ingredients": 1.6,
+        "Materials": 0.4,
+    }.get(normalize(category), 0.0)
+
+
+def _name_utility_bonus(name: str, effects: str) -> float:
+    name_key = key(name)
+    effects_key = key(effects)
     bonus = 0.0
-    if any(token in name for token in ["potion", "tea", "stew", "sandwich", "pie", "tartine", "ration"]):
-        bonus += 4.0
-    if row["station"] == "Alchemy Kit":
-        bonus += 2.0
-    if row["station"] in {"Campfire", "Cooking Pot"}:
-        bonus += 1.0
-    return (
-        bonus
-        + row["max_crafts"] * 3
-        + row["max_total_output"] * 0.6
-        + row["healing_total"] * 0.08
-        + row["stamina_total"] * 0.06
-        + row["mana_total"] * 0.08
-        + row["sale_value_total"] * 0.03
-        - max(1, len(row["ingredient_list"])) * 0.4
+    if any(token in name_key for token in ["potion", "elixir", "tea"]):
+        bonus += 3.8
+    if any(token in name_key for token in ["ration", "stew", "sandwich", "pie", "tartine", "omelet", "fricassee"]):
+        bonus += 3.2
+    if any(token in name_key for token in ["jam", "bread", "jerky", "flour", "cooked", "boiled", "grilled", "roasted"]):
+        bonus += 1.4
+    if any(token in effects_key for token in ["boon", "buff", "restore", "heal", "stamina", "mana", "recovery", "support", "travel"]):
+        bonus += 2.4
+    return bonus
+
+
+def smart_score(row: pd.Series) -> float:
+    ingredient_count = max(1, len(row["ingredient_list"]))
+    unique_ingredients = len({key(item_name) for item_name in row["ingredient_list"]})
+    effects = _effects_list(row["effects"])
+    category = row["category"] or infer_item_category(row["result"], {})
+    per_item_utility = (
+        row["heal_each"] * 0.55
+        + row["stamina_each"] * 0.5
+        + row["mana_each"] * 0.62
+        + row["sale_value_each"] * 0.16
+        + len(effects) * 2.6
+        + _category_utility(category)
+        + _name_utility_bonus(row["result"], row["effects"])
     )
+    throughput_bonus = (
+        min(int(row["max_crafts"]), 4) * 1.0
+        + min(int(row["max_total_output"]), 8) * 0.45
+        + min(int(row["result_qty_per_craft"]), 4) * 0.9
+        + (int(row["result_qty_per_craft"]) / ingredient_count) * 1.6
+    )
+    complexity_penalty = ingredient_count * 1.15 + max(0, unique_ingredients - 1) * 0.45
+    score = per_item_utility + throughput_bonus + _station_convenience(row["station"]) - complexity_penalty
+    if per_item_utility <= 1.5:
+        score -= 1.0
+    return score
 
 
 def build_direct_results(
@@ -470,7 +517,7 @@ def build_direct_results(
                 "mana_each": result_meta["mana"],
                 "sale_value_each": result_meta["sale_value"],
                 "effects": "; ".join(result_meta["effects"]),
-                "category": result_meta["category"],
+                "category": result_meta["category"] or infer_item_category(row["result"], metadata),
                 "healing_total": result_meta["heal"] * max_total_output,
                 "stamina_total": result_meta["stamina"] * max_total_output,
                 "mana_total": result_meta["mana"] * max_total_output,

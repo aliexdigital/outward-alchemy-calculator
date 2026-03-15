@@ -40,3 +40,42 @@ def test_sidebar_collapse_layout_contract_exists_in_css() -> None:
     assert "grid-template-columns: var(--rail-collapsed-width)" in css
     assert "transition: grid-template-columns" in css
     assert ".rail-toggle" in css
+
+
+def test_direct_result_sections_are_clearly_distinguished() -> None:
+    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+
+    assert "Best direct options" in app_source
+    assert "Full craftable list" in app_source
+    assert "What you can craft right now" not in app_source
+
+
+def test_left_rail_sections_are_individually_collapsible() -> None:
+    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+
+    assert 'const [railSections, setRailSections] = useState<Record<RailSectionId, boolean>>' in app_source
+    assert 'toggleRailSection("snapshot")' in app_source
+    assert 'toggleRailSection("planning")' in app_source
+    assert 'toggleRailSection("how")' in app_source
+    assert 'toggleRailSection("bulk")' in app_source
+    assert 'toggleRailSection("data")' in app_source
+    assert "className=\"panel-toggle\"" in app_source
+
+
+def test_near_craft_table_uses_missing_summary_without_slots_column() -> None:
+    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+
+    assert "<th>Still missing</th>" in app_source
+    assert "<th>Station</th>" in app_source
+    assert "<th>Slots</th>" not in app_source
+    assert "missing-summary" in app_source
+
+
+def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
+    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+
+    assert app_source.count("api.getMetadata(") == 1
+    assert "api.getDashboard(" in app_source
+    assert "api.getOverview(" not in app_source
+    assert "api.getInventory(" not in app_source
+    assert 'if (!metadata || activeSection !== "Craft now") return;' in app_source

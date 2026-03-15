@@ -25,6 +25,13 @@ export type OverviewResponse = {
   snapshot: Snapshot;
 };
 
+export type DashboardResponse = {
+  inventory: InventoryResponse;
+  snapshot: Snapshot;
+  best_direct: DirectResponse;
+  near: NearResponse;
+};
+
 export type RecipeResult = {
   result: string;
   result_qty_per_craft: number;

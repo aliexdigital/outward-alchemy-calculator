@@ -21,21 +21,38 @@ def recipes_df(rows: list[dict]) -> pd.DataFrame:
     return frame
 
 
-def make_service(rows: list[dict], raw_groups: dict[str, list[str]] | None = None) -> CalculatorService:
+def make_service(
+    rows: list[dict],
+    raw_groups: dict[str, list[str]] | None = None,
+    item_metadata: dict[str, dict] | None = None,
+) -> CalculatorService:
     frame = recipes_df(rows)
     raw_groups = raw_groups or {}
     normalized_groups = {core.key(group): [core.normalize(item) for item in members] for group, members in raw_groups.items()}
     groups = core.sanitize_groups(frame, normalized_groups)
     frame = core.prune_invalid_recipes(frame, groups)
-    item_metadata: dict[str, dict] = {}
+    normalized_metadata: dict[str, dict] = {}
+    for item_name, meta in (item_metadata or {}).items():
+        effects = meta.get("effects", [])
+        if isinstance(effects, str):
+            effects = [effects]
+        normalized_metadata[core.key(item_name)] = {
+            "item": core.normalize(item_name),
+            "heal": float(meta.get("heal", 0) or 0),
+            "stamina": float(meta.get("stamina", 0) or 0),
+            "mana": float(meta.get("mana", 0) or 0),
+            "sale_value": float(meta.get("sale_value", 0) or 0),
+            "effects": [core.normalize(effect) for effect in effects if core.normalize(effect)],
+            "category": core.normalize(meta.get("category", "")),
+        }
     item_catalog = core.build_item_catalog(frame, groups)
     data = CalculatorData(
         recipes_df=frame,
         groups=groups,
-        item_metadata=item_metadata,
+        item_metadata=normalized_metadata,
         recipe_index=core.build_recipe_index(frame),
         item_catalog=item_catalog,
-        catalog_by_category=core.build_catalog_by_category(item_catalog, item_metadata),
+        catalog_by_category=core.build_catalog_by_category(item_catalog, normalized_metadata),
         station_options=sorted(frame["station"].unique().tolist()),
     )
     return CalculatorService(data, InventoryStore())
@@ -152,6 +169,75 @@ def test_invalid_noop_self_recipe_is_pruned_by_guardrail() -> None:
     pruned = core.prune_invalid_recipes(frame, groups={})
 
     assert pruned.empty
+
+
+def test_smart_score_prefers_useful_results_over_generic_bulk_output() -> None:
+    service = make_service(
+        [
+            {
+                "recipe_id": "tea",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Battle Tea",
+                "result_qty": 1,
+                "station": "Cooking Pot",
+                "ingredients": "Leaf|Water",
+            },
+            {
+                "recipe_id": "mash",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Mystery Mash",
+                "result_qty": 4,
+                "station": "Campfire",
+                "ingredients": "Leaf",
+            },
+        ],
+        item_metadata={
+            "Battle Tea": {
+                "stamina": 22,
+                "sale_value": 9,
+                "effects": ["Useful stamina drink"],
+                "category": "Tea",
+            }
+        },
+    )
+    service.replace_inventory([{"item": "Leaf", "qty": 2}, {"item": "Clean Water", "qty": 1}])
+
+    ranked = service.direct_crafts(sort_mode="Smart score", stations=["Campfire", "Cooking Pot"])["items"]
+
+    assert [row["result"] for row in ranked[:2]] == ["Battle Tea", "Mystery Mash"]
+
+
+def test_smart_score_degrades_gracefully_when_metadata_is_missing() -> None:
+    service = make_service(
+        [
+            {
+                "recipe_id": "efficient",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Trail Mix",
+                "result_qty": 3,
+                "station": "Manual Crafting",
+                "ingredients": "Seed",
+            },
+            {
+                "recipe_id": "clunky",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Slug Pile",
+                "result_qty": 1,
+                "station": "Alchemy Kit",
+                "ingredients": "Seed|Dust|Leaf",
+            },
+        ],
+    )
+    service.replace_inventory([{"item": "Seed", "qty": 3}, {"item": "Dust", "qty": 1}, {"item": "Leaf", "qty": 1}])
+
+    ranked = service.direct_crafts(sort_mode="Smart score")["items"]
+
+    assert [row["result"] for row in ranked[:2]] == ["Trail Mix", "Slug Pile"]
+    assert ranked[0]["smart_score"] > ranked[1]["smart_score"]
 
 
 def test_planner_success_path_crafts_intermediates() -> None:
