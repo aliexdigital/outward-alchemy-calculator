@@ -1011,163 +1011,162 @@ with nav_col:
         render_active_section_note(active_section)
 st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
 
-# Manual edit point: main workflow width vs right results sidebar width.
-inventory_col, overview_col = st.columns([1.34, 0.66], gap="small")
-with inventory_col:
-    render_hook("main-column")
-    render_hook("inventory-section")
-    render_section_header("inventory-section", "Inventory input", "Search, filter, and edit the ingredients you own here.")
-    inventory_overview_placeholder = st.empty()
-    picker_inventory = render_inventory_picker(item_catalog, catalog_by_category)
+with named_block("content-shell"):
+    # Manual edit point: main workflow width vs right results sidebar width.
+    inventory_col, overview_col = st.columns([1.34, 0.66], gap="medium")
+    with inventory_col:
+        render_hook("main-column")
+        render_hook("inventory-section")
+        render_section_header("inventory-section", "Inventory input", "Search, filter, and edit the ingredients you own here.")
+        inventory_overview_placeholder = st.empty()
+        picker_inventory = render_inventory_picker(item_catalog, catalog_by_category)
 
-    inventory = Counter(picker_inventory)
-    inventory.update(extra_inventory)
+        inventory = Counter(picker_inventory)
+        inventory.update(extra_inventory)
 
-inventory_df = render_inventory_table(inventory)
-inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=126, max_height=236, row_px=26)
+    inventory_df = render_inventory_table(inventory)
+    inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=126, max_height=236, row_px=26)
 
-with inventory_overview_placeholder.container():
-    with named_panel("inventory-overview-card", border=True):
-        render_section_header(
-            "inventory-overview-card",
-            "Inventory overview",
-            "Your currently selected inventory, including anything added from paste or upload.",
-        )
-        with named_block("inventory-overview-top-row"):
-            top_row = st.columns([1, 1, 1.08], gap="small")
-            top_row[0].metric("Unique items", len(inventory))
-            top_row[1].metric("Total quantity", sum(inventory.values()))
-            with top_row[2]:
-                st.caption(" ")
-                st.download_button(
-                    "Download inventory CSV",
-                    data=inventory_df.to_csv(index=False).encode("utf-8"),
-                    file_name="outward_inventory.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    type="secondary",
-                    disabled=inventory_df.empty,
+    with inventory_overview_placeholder.container():
+        with named_panel("inventory-overview-card", border=True):
+            render_section_header(
+                "inventory-overview-card",
+                "Inventory overview",
+                "Your currently selected inventory, including anything added from paste or upload.",
+            )
+            with named_block("inventory-overview-top-row"):
+                top_row = st.columns([1, 1, 1.08], gap="small")
+                top_row[0].metric("Unique items", len(inventory))
+                top_row[1].metric("Total quantity", sum(inventory.values()))
+                with top_row[2]:
+                    st.caption(" ")
+                    st.download_button(
+                        "Download inventory CSV",
+                        data=inventory_df.to_csv(index=False).encode("utf-8"),
+                        file_name="outward_inventory.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        type="secondary",
+                        disabled=inventory_df.empty,
+                    )
+            with named_block("inventory-overview-body"):
+                if inventory_df.empty:
+                    render_empty_state(
+                        "No inventory selected yet. Add ingredients in the main list or use bulk add from the utility rail.",
+                        tone="inline",
+                    )
+                else:
+                    render_table_header("Inventory overview", "This table shows the current inventory feeding the calculator.")
+                    st.dataframe(inventory_df, use_container_width=True, hide_index=True, height=inventory_overview_height)
+
+    filtered = recipes_df[recipes_df["station"].isin(station_filter)].copy()
+    results = build_direct_results(filtered, inventory, groups, item_metadata)
+    craftable = results[results["max_crafts"] > 0].copy()
+    near = results[(results["max_crafts"] == 0) & (results["missing_slots"] <= 2)].copy()
+    ordered_preview = order_craftable_results(craftable, "Smart score") if not craftable.empty else craftable
+
+    top_heal = craftable.sort_values(["healing_total", "result"], ascending=[False, True]).head(1)
+    top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[False, True]).head(1)
+    top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
+    render_utility_sidebar_extras(snapshot_placeholder, inventory_df, filtered, craftable, near, top_heal, top_stamina, top_mana)
+
+    with overview_col:
+        render_hook("right-sidebar")
+        with named_panel("best-direct-card", border=True):
+            render_section_header(
+                "best-direct-card",
+                "Best direct options",
+                "A quiet shortlist of the strongest immediate crafts from your current inventory.",
+            )
+            with named_block("best-direct-stats"):
+                render_compact_stats(
+                    [("Direct crafts", len(craftable)), ("Near crafts", len(near))],
+                    columns=2,
+                    variant="sidebar tight",
                 )
-        with named_block("inventory-overview-body"):
-            if inventory_df.empty:
-                render_empty_state(
-                    "No inventory selected yet. Add ingredients in the main list or use bulk add from the utility rail.",
-                    tone="inline",
-                )
+            preview_cols = ["result", "max_crafts", "max_total_output", "station", "effects", "ingredients"]
+            preview_df = present_recipe_table(ordered_preview.head(12), preview_cols) if not ordered_preview.empty else pd.DataFrame()
+            if preview_df.empty:
+                render_empty_state("Direct craft recommendations will appear here once your selected inventory can make something.")
             else:
-                render_table_header("Inventory overview", "This table shows the current inventory feeding the calculator.")
-                st.dataframe(inventory_df, use_container_width=True, hide_index=True, height=inventory_overview_height)
-
-filtered = recipes_df[recipes_df["station"].isin(station_filter)].copy()
-results = build_direct_results(filtered, inventory, groups, item_metadata)
-craftable = results[results["max_crafts"] > 0].copy()
-near = results[(results["max_crafts"] == 0) & (results["missing_slots"] <= 2)].copy()
-ordered_preview = order_craftable_results(craftable, "Smart score") if not craftable.empty else craftable
-
-top_heal = craftable.sort_values(["healing_total", "result"], ascending=[False, True]).head(1)
-top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[False, True]).head(1)
-top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
-render_utility_sidebar_extras(snapshot_placeholder, inventory_df, filtered, craftable, near, top_heal, top_stamina, top_mana)
-
-with overview_col:
-    render_hook("right-sidebar")
-    with named_panel("best-direct-card", border=True):
-        render_section_header(
-            "best-direct-card",
-            "Best direct options",
-            "A quiet shortlist of the strongest immediate crafts from your current inventory.",
-        )
-        with named_block("best-direct-stats"):
-            render_compact_stats(
-                [("Direct crafts", len(craftable)), ("Near crafts", len(near))],
-                columns=2,
-                variant="sidebar tight",
-            )
-        preview_cols = ["result", "max_crafts", "max_total_output", "station", "effects", "ingredients"]
-        preview_df = present_recipe_table(ordered_preview.head(12), preview_cols) if not ordered_preview.empty else pd.DataFrame()
-        if preview_df.empty:
-            render_empty_state("Direct craft recommendations will appear here once your selected inventory can make something.")
-        else:
-            render_table_header("Best direct options", "A quick shortlist of the most immediately craftable options from your current inventory.")
-            st.dataframe(
-                preview_df,
-                use_container_width=True,
-                hide_index=True,
-                height=table_height_for_rows(len(preview_df), min_height=150, max_height=260, row_px=28),
-            )
-
-with overview_col:
-    with named_panel("almost-craftable-card", border=True):
-        render_section_header(
-            "almost-craftable-card",
-            "Almost craftable recipes",
-            "Near-craftable recipes that are one or two missing ingredient slots away.",
-        )
-        with named_block("almost-craftable-stats"):
-            render_compact_stats(
-                [("Near crafts", len(near)), ("Known recipes", len(filtered))],
-                columns=2,
-                variant="sidebar tight",
-            )
-        if near.empty:
-            render_empty_state("No recipes are within one or two missing ingredient slots right now.")
-        else:
-            near_preview_cols = ["result", "missing_slots", "missing_items", "station", "ingredients"]
-            render_table_header("Almost craftable recipes", "Recipes that are close enough to matter for the current bag and station filters.")
-            st.dataframe(
-                present_recipe_table(near.sort_values(["missing_slots", "result"]).head(10), near_preview_cols),
-                use_container_width=True,
-                hide_index=True,
-                height=table_height_for_rows(min(len(near), 10), min_height=150, max_height=240, row_px=28),
-            )
-
-with overview_col:
-    with named_panel("craft-now-card", border=True):
-        with named_expander("craft-now-panel", "What you can craft right now", expanded=active_section == "Craft now"):
-            render_tab_help(
-                "Craft now",
-                "This answers the live question: what can I make immediately from what I already have? Sort by output, healing, stamina, mana, or sale value."
-            )
-            if craftable.empty:
-                render_empty_state("No direct crafts found with the current inventory.", tone="soft")
-            else:
-                sort_mode = st.selectbox(
-                    "Sort results by",
-                    list(recipe_sort_options().keys()),
-                    index=0,
-                    key="craft_now_sort_side",
-                    help="Choose what 'best' means for this pass: convenience, total output, healing, stamina, mana, or sale value.",
-                )
-                ordered = order_craftable_results(craftable, sort_mode)
-                craft_now_cols = [
-                    "result",
-                    "result_qty_per_craft",
-                    "max_crafts",
-                    "max_total_output",
-                    "heal_each",
-                    "stamina_each",
-                    "mana_each",
-                    "sale_value_each",
-                    "effects",
-                    "station",
-                    "ingredients",
-                ]
-                render_table_header("Craftable recipes", "Recipes you can make immediately with the current inventory and station filters.")
+                render_table_header("Best direct options", "A quick shortlist of the most immediately craftable options from your current inventory.")
                 st.dataframe(
-                    present_recipe_table(ordered, craft_now_cols),
+                    preview_df,
                     use_container_width=True,
                     hide_index=True,
-                    height=table_height_for_rows(len(ordered), min_height=200, max_height=340, row_px=28),
+                    height=table_height_for_rows(len(preview_df), min_height=150, max_height=260, row_px=28),
                 )
-                csv_bytes = ordered.drop(columns=["ingredient_list"]).to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "Download craftable recipes as CSV",
-                    data=csv_bytes,
-                    file_name="outward_craftable_recipes.csv",
-                    mime="text/csv",
-                    help="Exports the currently ranked craftable list with effect and value columns.",
-                    type="secondary",
+
+        with named_panel("almost-craftable-card", border=True):
+            render_section_header(
+                "almost-craftable-card",
+                "Almost craftable recipes",
+                "Near-craftable recipes that are one or two missing ingredient slots away.",
+            )
+            with named_block("almost-craftable-stats"):
+                render_compact_stats(
+                    [("Near crafts", len(near)), ("Known recipes", len(filtered))],
+                    columns=2,
+                    variant="sidebar tight",
                 )
+            if near.empty:
+                render_empty_state("No recipes are within one or two missing ingredient slots right now.")
+            else:
+                near_preview_cols = ["result", "missing_slots", "missing_items", "station", "ingredients"]
+                render_table_header("Almost craftable recipes", "Recipes that are close enough to matter for the current bag and station filters.")
+                st.dataframe(
+                    present_recipe_table(near.sort_values(["missing_slots", "result"]).head(10), near_preview_cols),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=table_height_for_rows(min(len(near), 10), min_height=150, max_height=240, row_px=28),
+                )
+
+        with named_panel("craft-now-card", border=True):
+            with named_expander("craft-now-panel", "What you can craft right now", expanded=active_section == "Craft now"):
+                render_tab_help(
+                    "Craft now",
+                    "This answers the live question: what can I make immediately from what I already have? Sort by output, healing, stamina, mana, or sale value."
+                )
+                if craftable.empty:
+                    render_empty_state("No direct crafts found with the current inventory.", tone="soft")
+                else:
+                    sort_mode = st.selectbox(
+                        "Sort results by",
+                        list(recipe_sort_options().keys()),
+                        index=0,
+                        key="craft_now_sort_side",
+                        help="Choose what 'best' means for this pass: convenience, total output, healing, stamina, mana, or sale value.",
+                    )
+                    ordered = order_craftable_results(craftable, sort_mode)
+                    craft_now_cols = [
+                        "result",
+                        "result_qty_per_craft",
+                        "max_crafts",
+                        "max_total_output",
+                        "heal_each",
+                        "stamina_each",
+                        "mana_each",
+                        "sale_value_each",
+                        "effects",
+                        "station",
+                        "ingredients",
+                    ]
+                    render_table_header("Craftable recipes", "Recipes you can make immediately with the current inventory and station filters.")
+                    st.dataframe(
+                        present_recipe_table(ordered, craft_now_cols),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=table_height_for_rows(len(ordered), min_height=200, max_height=340, row_px=28),
+                    )
+                    csv_bytes = ordered.drop(columns=["ingredient_list"]).to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download craftable recipes as CSV",
+                        data=csv_bytes,
+                        file_name="outward_craftable_recipes.csv",
+                        mime="text/csv",
+                        help="Exports the currently ranked craftable list with effect and value columns.",
+                        type="secondary",
+                    )
 
 if active_section == "Plan a target":
     with named_expander("plan-target-panel", "Plan a target", expanded=True):
