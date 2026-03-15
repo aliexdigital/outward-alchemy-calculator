@@ -918,6 +918,49 @@ def render_utility_sidebar(
     return station_filter, max_depth, extra_inventory
 
 
+def render_utility_sidebar_extras(
+    inventory_df: pd.DataFrame,
+    filtered: pd.DataFrame,
+    craftable: pd.DataFrame,
+    near: pd.DataFrame,
+    top_heal: pd.DataFrame,
+    top_stamina: pd.DataFrame,
+    top_mana: pd.DataFrame,
+) -> None:
+    with st.sidebar:
+        with st.expander("Snapshot", expanded=False):
+            st.caption("Compact summary of your current stash, direct options, and near-craft coverage.")
+            render_compact_stats(
+                [
+                    ("Inventory lines", len(inventory_df)),
+                    ("Known recipes", len(filtered)),
+                    ("Direct crafts", len(craftable)),
+                    ("Near crafts", len(near)),
+                ],
+                columns=2,
+                variant="sidebar tight",
+            )
+            render_compact_stats(
+                [
+                    ("Best heal", top_heal.iloc[0]["result"] if not top_heal.empty and top_heal.iloc[0]["healing_total"] > 0 else "None"),
+                    ("Best stamina", top_stamina.iloc[0]["result"] if not top_stamina.empty and top_stamina.iloc[0]["stamina_total"] > 0 else "None"),
+                    ("Best mana", top_mana.iloc[0]["result"] if not top_mana.empty and top_mana.iloc[0]["mana_total"] > 0 else "None"),
+                ],
+                columns=1,
+                variant="sidebar tight",
+            )
+
+        with st.expander("How to use this sidebar", expanded=False):
+            st.markdown(
+                """
+                - **Planning tools** controls stations and planner depth.
+                - **Bulk add inventory** supports CSV, Excel, and pasted item lists.
+                - **Snapshot** gives the quick inventory/crafting summary.
+                - Use the top navigation for full views like **Craft now**, **Plan a target**, **Shopping list**, and **Missing ingredients**.
+                """
+            )
+
+
 def inject_styles() -> None:
     st.markdown(
         """
@@ -1212,15 +1255,15 @@ def inject_styles() -> None:
             margin: 0.16rem 0 0.35rem 0;
         }
         [data-baseweb="tag"] {
-            transform: scale(0.48);
+            transform: scale(0.56);
             transform-origin: left center;
         }
         [data-baseweb="tag"] span {
-            font-size: 0.6rem !important;
+            font-size: 0.66rem !important;
         }
         [data-baseweb="tag"] > span {
-            padding-top: 0.02rem !important;
-            padding-bottom: 0.02rem !important;
+            padding-top: 0.04rem !important;
+            padding-bottom: 0.04rem !important;
         }
         [data-testid="stSidebar"] {
             background: linear-gradient(180deg, rgba(18, 10, 22, 0.96), rgba(24, 14, 29, 0.96));
@@ -1333,7 +1376,7 @@ st.markdown(
     <div class="hero-card">
         <h1 class="hero-title" style="margin: 0;">Alie's Outward Crafting</h1>
         <p class="hero-subtitle">
-            Compare recipes against your stash, rank crafts by recovery or value, and build a clean shopping list for the next run.
+            Compare recipes, rank recovery or value, and build a clean shopping list.
         </p>
     </div>
     """,
@@ -1396,6 +1439,7 @@ ordered_preview = order_craftable_results(craftable, "Smart score") if not craft
 top_heal = craftable.sort_values(["healing_total", "result"], ascending=[False, True]).head(1)
 top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[False, True]).head(1)
 top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
+render_utility_sidebar_extras(inventory_df, filtered, craftable, near, top_heal, top_stamina, top_mana)
 
 with overview_col:
     with st.container(border=True):
@@ -1421,27 +1465,24 @@ with overview_col:
 
 with overview_col:
     with st.container(border=True):
-        st.subheader("Snapshot")
-        st.caption("Compact summary of your current stash, direct options, and recipe coverage.")
+        st.subheader("Almost craftable recipes")
+        st.caption("Near-craftable recipes that are one or two missing ingredient slots away.")
         render_compact_stats(
-            [
-                ("Inventory lines", len(inventory_df)),
-                ("Known recipes", len(filtered)),
-                ("Direct crafts", len(craftable)),
-                ("Near crafts", len(near)),
-            ],
+            [("Near crafts", len(near)), ("Known recipes", len(filtered))],
             columns=2,
             variant="sidebar tight",
         )
-        render_compact_stats(
-            [
-                ("Best heal", top_heal.iloc[0]["result"] if not top_heal.empty and top_heal.iloc[0]["healing_total"] > 0 else "None"),
-                ("Best stamina", top_stamina.iloc[0]["result"] if not top_stamina.empty and top_stamina.iloc[0]["stamina_total"] > 0 else "None"),
-                ("Best mana", top_mana.iloc[0]["result"] if not top_mana.empty and top_mana.iloc[0]["mana_total"] > 0 else "None"),
-            ],
-            columns=3,
-            variant="sidebar tight",
-        )
+        if near.empty:
+            render_quiet_empty("No recipes are within one or two missing ingredient slots right now.")
+        else:
+            near_preview_cols = ["result", "missing_slots", "missing_items", "station", "ingredients"]
+            render_table_header("Almost craftable recipes", "Recipes that are close enough to matter for the current bag and station filters.")
+            st.dataframe(
+                present_recipe_table(near.sort_values(["missing_slots", "result"]).head(10), near_preview_cols),
+                use_container_width=True,
+                hide_index=True,
+                height=table_height_for_rows(min(len(near), 10), min_height=150, max_height=240, row_px=28),
+            )
 
 with overview_col:
     with st.container(border=True):
@@ -1490,18 +1531,6 @@ with overview_col:
                     help="Exports the currently ranked craftable list with effect and value columns.",
                     type="secondary",
                 )
-
-with overview_col:
-    with st.container(border=True):
-        with st.expander("How to read this sidebar", expanded=False):
-            st.markdown(
-                """
-                - **Inventory overview** shows the exact bag the calculator is using right now.
-                - **Snapshot** is the compact summary: how many recipes are known, direct, or nearly available.
-                - **Best direct options** is the quick shortlist for immediate crafting.
-                - **What you can craft right now** expands into the full ranked craftable table.
-                """
-            )
 
 if active_section == "Plan a target":
     with st.expander("Plan a target", expanded=True):
