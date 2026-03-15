@@ -883,6 +883,16 @@ def render_utility_sidebar(
                     help="Higher depth allows more intermediate crafting steps, but may take longer to search.",
                 )
 
+        with named_expander("sidebar-guide-panel", "How to use this sidebar", expanded=False):
+            st.markdown(
+                """
+                - **Planning tools** controls stations and planner depth.
+                - **Bulk add inventory** supports CSV, Excel, and pasted item lists.
+                - **Snapshot** gives the quick inventory/crafting summary.
+                - Use the top navigation for full views like **Craft now**, **Plan a target**, **Shopping list**, and **Missing ingredients**.
+                """
+            )
+
         with named_expander("bulk-add-panel", "Bulk add inventory", expanded=False):
             st.caption("Use this if paste/upload is faster than ticking individual ingredients.")
             uploaded = st.file_uploader(
@@ -961,16 +971,6 @@ def render_utility_sidebar_extras(
                     variant="sidebar tight",
                 )
 
-        with named_expander("sidebar-guide-panel", "How to use this sidebar", expanded=False):
-            st.markdown(
-                """
-                - **Planning tools** controls stations and planner depth.
-                - **Bulk add inventory** supports CSV, Excel, and pasted item lists.
-                - **Snapshot** gives the quick inventory/crafting summary.
-                - Use the top navigation for full views like **Craft now**, **Plan a target**, **Shopping list**, and **Missing ingredients**.
-                """
-            )
-
 
 def recipe_sort_options() -> Dict[str, List[str]]:
     return {
@@ -1024,7 +1024,7 @@ with inventory_col:
     inventory.update(extra_inventory)
 
 inventory_df = render_inventory_table(inventory)
-inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=150, max_height=290, row_px=28)
+inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=126, max_height=236, row_px=26)
 
 with inventory_overview_placeholder.container():
     with named_panel("inventory-overview-card", border=True):
