@@ -227,14 +227,17 @@ def test_craft_now_main_view_contains_the_full_craftable_table_and_sort_control(
 
 def test_long_result_lists_use_internal_scroll_containers_without_changing_column_contract() -> None:
     css = read_frontend("styles/app.css")
+    theme_css = read_frontend("styles/theme.css")
 
     assert ".results-preview {" in css
-    assert "max-height: clamp(12.75rem, 22vh, 17.5rem);" in css
+    assert "max-height: clamp(14rem, 28vh, 20rem);" in css
     assert "overflow: auto;" in css
     assert "scrollbar-gutter: stable both-edges;" in css
     assert ".results-rail .craft-table-shell {" in css
-    assert "grid-template-columns: var(--rail-width) minmax(0, 1.34fr) minmax(22rem, 0.96fr);" in css
-    assert "height: clamp(28rem, calc(100vh - 15rem), 48rem);" in css
+    assert "grid-template-columns: var(--rail-width) minmax(0, 1fr) clamp(19.5rem, 24vw, var(--results-width));" in css
+    assert "height: clamp(40rem, calc(100vh - 10rem), 60rem);" in css
+    assert "--rail-width: 13.25rem;" in theme_css
+    assert "--results-width: 21.5rem;" in theme_css
 
 
 def test_category_chips_stay_on_one_line_with_scroll_instead_of_wrapping() -> None:
@@ -252,14 +255,21 @@ def test_left_rail_uses_a_scroll_region_so_expanding_one_section_does_not_hide_o
 
     assert ".utility-rail {" in css
     assert "grid-template-rows: auto minmax(0, 1fr);" in css
+    assert "position: sticky;" in css
+    assert "top: 0;" in css
     assert ".rail-scroll {" in css
     assert "min-height: 0;" in css
-    assert "overflow: auto;" in css
+    assert "height: 100%;" in css
+    assert "overflow-y: auto;" in css
 
 
 def test_banner_is_full_width_and_centered_in_css() -> None:
     css = read_frontend("styles/app.css")
 
+    assert ".app-page {" in css
+    assert "display: flex;" in css
+    assert "flex-direction: column;" in css
     assert ".app-banner" in css
     assert "text-align: center" in css
     assert "justify-items: center" in css
+    assert "min-height: 6.35rem;" in css

@@ -23,10 +23,10 @@
   --space-2: 0.75rem;
   --space-3: 1rem;
   --space-4: 1.4rem;
-  --rail-width: 17.5rem;
+  --rail-width: 13.25rem;
   --rail-collapsed-width: 3rem;
-  --results-width: 24.75rem;
-  --shell-gap: 1rem;
+  --results-width: 21.5rem;
+  --shell-gap: 0.72rem;
   --font-display: "Archivo Black", "Arial Black", sans-serif;
   --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
 }
