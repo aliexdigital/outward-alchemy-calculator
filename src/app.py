@@ -1240,11 +1240,8 @@ def inject_styles() -> None:
             transform: scale(0.6);
             transform-origin: left center;
         }
-        .stMultiSelect [data-baseweb="tag"] {
-            font-size: 1rem !important;
-            line-height: 1.2 !important;
-        }
-        .stMultiSelect [data-baseweb="tag"] span {
+        .stMultiSelect [data-baseweb="tag"] > span,
+        .stMultiSelect [data-baseweb="tag"] > span > span {
             font-size: 1rem !important;
             line-height: 1.2 !important;
         }
@@ -1387,6 +1384,7 @@ inventory_col, overview_col = st.columns([1.34, 0.66], gap="small")
 with inventory_col:
     st.subheader("Inventory input")
     st.caption("Search, filter, and edit the ingredients you own here.")
+    inventory_overview_placeholder = st.empty()
     picker_inventory = render_inventory_picker(item_catalog, catalog_by_category)
 
     inventory = Counter(picker_inventory)
@@ -1395,7 +1393,7 @@ with inventory_col:
 inventory_df = render_inventory_table(inventory)
 inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=150, max_height=290, row_px=28)
 
-with inventory_col:
+with inventory_overview_placeholder.container():
     with st.container(border=True):
         st.subheader("Inventory overview")
         st.caption("Your currently selected inventory, including anything added from paste or upload.")
