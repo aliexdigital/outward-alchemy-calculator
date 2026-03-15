@@ -637,6 +637,14 @@ def toggle_utility_rail() -> None:
     st.rerun()
 
 
+def utility_rail_defaults(recipes_df: pd.DataFrame) -> Tuple[List[str], int, Counter]:
+    station_options = sorted(recipes_df["station"].dropna().unique().tolist())
+    station_filter = list(st.session_state.get("utility_station_filter", station_options))
+    max_depth = int(st.session_state.get("utility_planner_depth", 5))
+    extra_inventory = Counter(st.session_state.get("extra_inventory_counts", {}))
+    return station_filter, max_depth, extra_inventory
+
+
 def add_selected_search_item() -> None:
     selected = normalize(st.session_state.get("inventory_search_select"))
     if not selected:
@@ -867,7 +875,7 @@ def render_utility_sidebar(
     glossary = column_glossary()
     extra_inventory = Counter()
     with named_block("utility-rail-toggle"):
-        toggle_label = "›" if utility_rail_collapsed() else "‹"
+        toggle_label = ">" if utility_rail_collapsed() else "<"
         help_text = "Expand the utility rail." if utility_rail_collapsed() else "Collapse the utility rail."
         st.button(
             toggle_label,
@@ -952,15 +960,16 @@ def render_utility_sidebar(
             st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
             st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
 
-        with named_expander("column-help-panel", "Column help", expanded=False):
-            for column, description in glossary:
-                st.markdown(f"- **{column}**: {description}")
+    with named_expander("column-help-panel", "Column help", expanded=False):
+        for column, description in glossary:
+            st.markdown(f"- **{column}**: {description}")
 
+    st.session_state["extra_inventory_counts"] = dict(extra_inventory)
     return station_filter, max_depth, extra_inventory, snapshot_placeholder
 
 
 def render_utility_sidebar_extras(
-    snapshot_placeholder: st.delta_generator.DeltaGenerator,
+    snapshot_placeholder: Optional[st.delta_generator.DeltaGenerator],
     inventory_df: pd.DataFrame,
     filtered: pd.DataFrame,
     craftable: pd.DataFrame,
@@ -969,6 +978,8 @@ def render_utility_sidebar_extras(
     top_stamina: pd.DataFrame,
     top_mana: pd.DataFrame,
 ) -> None:
+    if snapshot_placeholder is None:
+        return
     with snapshot_placeholder.container():
         with named_panel("snapshot-card", border=True):
             render_section_header(
@@ -1028,16 +1039,29 @@ render_hook("app-shell")
 using_live = (DATA_DIR / "recipes.csv").exists()
 
 with named_block("content-shell"):
-    shell_columns = [0.12, 2.18, 1.08] if utility_rail_collapsed() else [0.46, 2.0, 1.0]
+    rail_is_collapsed = utility_rail_collapsed()
+    shell_columns = [0.085, 2.34, 1.14] if rail_is_collapsed else [0.46, 2.0, 1.0]
     left_col, main_col, right_col = st.columns(shell_columns, gap="medium")
 
     with left_col:
-        render_hook("utility-rail-region")
-        if utility_rail_collapsed():
+        if rail_is_collapsed:
             render_hook("utility-rail-collapsed")
-        station_filter, max_depth, extra_inventory, snapshot_placeholder = render_utility_sidebar(
-            recipes_df, groups, item_metadata, using_live
-        )
+            with named_block("utility-rail-toggle"):
+                st.button(
+                    ">",
+                    key="utility_rail_toggle_collapsed",
+                    on_click=toggle_utility_rail,
+                    help="Expand the utility rail.",
+                    use_container_width=True,
+                    type="secondary",
+                )
+            station_filter, max_depth, extra_inventory = utility_rail_defaults(recipes_df)
+            snapshot_placeholder = None
+        else:
+            render_hook("utility-rail-region")
+            station_filter, max_depth, extra_inventory, snapshot_placeholder = render_utility_sidebar(
+                recipes_df, groups, item_metadata, using_live
+            )
 
     with main_col:
         render_hook("main-column")
