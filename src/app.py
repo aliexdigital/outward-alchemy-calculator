@@ -997,21 +997,24 @@ item_catalog = build_item_catalog(recipes_df, groups)
 catalog_by_category = build_catalog_by_category(item_catalog, item_metadata)
 
 render_hook("app-shell")
-render_hero("Alie's Outward Crafting", "Compare recipes, rank recovery or value, and build a clean shopping list.")
 using_live = (DATA_DIR / "recipes.csv").exists()
 
-with named_block("top-mode-nav"):
-    active_section = render_section_nav()
-    render_active_section_note(active_section)
-st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
-
 with named_block("content-shell"):
-    with named_block("utility-rail-region"):
+    left_col, main_col, right_col = st.columns([0.46, 2.0, 1.0], gap="medium")
+
+    with left_col:
+        render_hook("utility-rail-region")
         station_filter, max_depth, extra_inventory, snapshot_placeholder = render_utility_sidebar(
             recipes_df, groups, item_metadata, using_live
         )
 
-    with named_block("main-column"):
+    with main_col:
+        render_hook("main-column")
+        render_hero("Alie's Outward Crafting", "Compare recipes, rank recovery or value, and build a clean shopping list.")
+        with named_block("top-mode-nav"):
+            active_section = render_section_nav()
+            render_active_section_note(active_section)
+        st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
         render_hook("inventory-section")
         render_section_header("inventory-section", "Inventory input", "Search, filter, and edit the ingredients you own here.")
         inventory_overview_placeholder = st.empty()
@@ -1066,7 +1069,8 @@ with named_block("content-shell"):
     top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
     render_utility_sidebar_extras(snapshot_placeholder, inventory_df, filtered, craftable, near, top_heal, top_stamina, top_mana)
 
-    with named_block("right-sidebar"):
+    with right_col:
+        render_hook("right-sidebar")
         with named_panel("best-direct-card", border=True):
             render_section_header(
                 "best-direct-card",

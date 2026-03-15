@@ -163,63 +163,56 @@ div[data-testid="stVerticalBlock"]:has(.top-mode-nav-hook) div[role="radiogroup"
 
 /* Layout Shell */
 div[data-testid="stVerticalBlock"]:has(.content-shell-hook) {
-    display: grid !important;
-    grid-template-columns: 15.5rem minmax(0, 1fr) minmax(22rem, 25rem);
-    column-gap: 1rem;
-    align-items: start;
-    row-gap: 0;
+    gap: 0.03rem;
 }
 
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"] {
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stHorizontalBlock"] {
+    align-items: flex-start;
+    gap: 1rem;
+}
+
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
     min-width: 0;
 }
 
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) {
-    grid-column: 1;
-}
-
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.main-column-hook) {
-    grid-column: 2;
-}
-
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.right-sidebar-hook) {
-    grid-column: 3;
-}
-
-div[data-testid="stVerticalBlock"]:has(.main-column-hook) {
+div[data-testid="column"]:has(.main-column-hook) > div[data-testid="stVerticalBlock"] {
     gap: 0.08rem;
 }
 
-div[data-testid="stVerticalBlock"]:has(.right-sidebar-hook) {
+div[data-testid="column"]:has(.right-sidebar-hook) > div[data-testid="stVerticalBlock"] {
     gap: 0.1rem;
 }
 
-div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) {
+div[data-testid="column"]:has(.utility-rail-region-hook) > div[data-testid="stVerticalBlock"] {
     gap: 0.02rem;
     padding-right: 0.08rem;
 }
 
-div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) > div[data-testid="stVerticalBlock"]:has(.utility-rail-hook) {
+div[data-testid="column"]:has(.utility-rail-region-hook) > div[data-testid="stVerticalBlock"]:has(.utility-rail-hook) {
     gap: 0.02rem;
 }
 
-div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details {
+div[data-testid="column"]:has(.utility-rail-region-hook) details {
     margin: 0 !important;
 }
 
-div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details > div {
+div[data-testid="column"]:has(.utility-rail-region-hook) details > div {
     padding-top: 0 !important;
 }
 
-div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details summary {
+div[data-testid="column"]:has(.utility-rail-region-hook) details summary {
     padding-top: 0.06rem !important;
     padding-bottom: 0.06rem !important;
 }
 
-@media (max-width: 1200px) {
-    div[data-testid="stVerticalBlock"]:has(.content-shell-hook) {
-        grid-template-columns: minmax(0, 1fr);
-        row-gap: 0.5rem;
+@media (min-width: 1180px) {
+    div[data-testid="column"]:has(.utility-rail-region-hook) {
+        min-width: 15.5rem !important;
+        max-width: 15.5rem !important;
+    }
+
+    div[data-testid="column"]:has(.right-sidebar-hook) {
+        min-width: 24.5rem !important;
     }
 }
 
