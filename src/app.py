@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 from collections import Counter
 from functools import lru_cache
-from html import escape
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -623,21 +622,20 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
     suggestions = [item_name for item_name in catalog if search_key and search_key in key(item_name)][:8]
     if search_key:
         if suggestions:
-            st.caption("Autocomplete")
-            selected_suggestion = st.selectbox(
-                "Matching ingredients",
-                options=suggestions,
-                index=None,
-                placeholder="Pick a matching ingredient to add...",
-                key=f"inventory_search_choice_{search_key}",
-                label_visibility="collapsed",
-                help="Choose a matching ingredient to add it directly to your inventory.",
-            )
-            if selected_suggestion:
-                picker_inventory[selected_suggestion] = max(1, int(picker_inventory.get(selected_suggestion, 0)) + (0 if picker_inventory.get(selected_suggestion, 0) > 0 else 1))
-                st.session_state["picker_inventory"] = picker_inventory
-                st.session_state["inventory_search_text"] = ""
-                st.rerun()
+            match_cols = st.columns(min(4, len(suggestions)))
+            for idx, item_name in enumerate(suggestions):
+                current_qty = int(picker_inventory.get(item_name, 0))
+                label = item_name if current_qty <= 0 else f"{item_name} ({current_qty})"
+                if match_cols[idx % len(match_cols)].button(
+                    label,
+                    key=f"search_suggestion_{search_key}_{idx}_{item_name}",
+                    use_container_width=True,
+                    type="secondary",
+                ):
+                    picker_inventory[item_name] = max(1, current_qty + (0 if current_qty > 0 else 1))
+                    st.session_state["picker_inventory"] = picker_inventory
+                    st.session_state["inventory_search_text"] = ""
+                    st.rerun()
         else:
             render_quiet_empty("No ingredient names match the current search.", tone="inline")
 
@@ -840,27 +838,16 @@ def render_table_header(title: str, help_text: str) -> None:
 
 
 def render_compact_stats(stats: List[Tuple[str, object]], columns: int = 4, variant: str = "") -> None:
-    cards = []
-    for label, value in stats:
-        cards.append(
-            """
-            <div class="stat-pill">
-                <span class="stat-pill-label">{label}</span>
-                <span class="stat-pill-value">{value}</span>
-            </div>
-            """.format(label=escape(str(label)), value=escape(str(value)))
-        )
-    st.markdown(
-        f'<div class="compact-stats {variant}" style="grid-template-columns: repeat({columns}, minmax(0, 1fr));">{"".join(cards)}</div>',
-        unsafe_allow_html=True,
-    )
+    stat_columns = st.columns(columns, gap="small")
+    for idx, (label, value) in enumerate(stats):
+        stat_columns[idx % columns].metric(str(label), str(value))
 
 
 def render_quiet_empty(message: str, tone: str = "soft") -> None:
-    st.markdown(
-        f'<div class="empty-state {tone}">{escape(message)}</div>',
-        unsafe_allow_html=True,
-    )
+    if tone == "inline":
+        st.caption(message)
+    else:
+        st.caption(message)
 
 
 def table_height_for_rows(row_count: int, min_height: int = 150, max_height: int = 320, row_px: int = 32) -> int:
@@ -878,7 +865,7 @@ def render_utility_sidebar(
     glossary = column_glossary()
     extra_inventory = Counter()
     with st.sidebar:
-        st.markdown('<div class="utility-rail-label">Utility rail</div>', unsafe_allow_html=True)
+        st.caption("UTILITY RAIL")
         st.caption("Planning tools, helper notes, and bulk inventory actions live here.")
 
         with st.expander("Planning tools", expanded=True):
@@ -922,13 +909,11 @@ def render_utility_sidebar(
                 extra_inventory.update(counts_from_text(raw_text))
 
         with st.expander("Data details", expanded=False):
-            st.markdown('<div class="ghost-card">', unsafe_allow_html=True)
             st.caption(f"Recipes loaded: {len(recipes_df)}")
             st.caption(f"Ingredient groups cleaned: {len(groups)}")
             st.caption(f"Items with effect/value notes: {len(item_metadata)}")
             st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
             st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
-            st.markdown("</div>", unsafe_allow_html=True)
 
         with st.expander("Column help", expanded=False):
             for column, description in glossary:
@@ -1335,20 +1320,17 @@ st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
 
 inventory_col, overview_col = st.columns([1.34, 0.66], gap="small")
 with inventory_col:
-    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
     st.subheader("Inventory input")
     st.caption("Search, filter, and edit the ingredients you own here.")
     picker_inventory = render_inventory_picker(item_catalog, catalog_by_category)
 
     inventory = Counter(picker_inventory)
     inventory.update(extra_inventory)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 inventory_df = render_inventory_table(inventory)
 inventory_overview_height = table_height_for_rows(len(inventory_df), min_height=150, max_height=290, row_px=28)
 
 with overview_col:
-    st.markdown('<div class="side-card">', unsafe_allow_html=True)
     st.subheader("Inventory overview")
     st.caption("Your currently selected inventory, including anything added from paste or upload.")
     bag_cols = st.columns([1.28, 0.92], gap="small")
@@ -1373,7 +1355,6 @@ with overview_col:
     else:
         render_table_header("Inventory overview", "This table shows the current inventory feeding the calculator.")
         st.dataframe(inventory_df, use_container_width=True, hide_index=True, height=inventory_overview_height)
-    st.markdown("</div>", unsafe_allow_html=True)
 
 filtered = recipes_df[recipes_df["station"].isin(station_filter)].copy()
 results = build_direct_results(filtered, inventory, groups, item_metadata)
@@ -1386,7 +1367,6 @@ top_stamina = craftable.sort_values(["stamina_total", "result"], ascending=[Fals
 top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
 
 with overview_col:
-    st.markdown('<div class="side-card">', unsafe_allow_html=True)
     st.subheader("Snapshot")
     st.caption("Compact summary of your current stash, direct options, and recipe coverage.")
     render_compact_stats(
@@ -1408,10 +1388,8 @@ with overview_col:
         columns=3,
         variant="sidebar tight",
     )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with overview_col:
-    st.markdown('<div class="side-card">', unsafe_allow_html=True)
     st.subheader("Best direct options")
     st.caption("A quiet shortlist of the strongest immediate crafts from your current inventory.")
     render_compact_stats(
@@ -1431,7 +1409,6 @@ with overview_col:
             hide_index=True,
             height=table_height_for_rows(len(preview_df), min_height=150, max_height=260, row_px=28),
         )
-    st.markdown("</div>", unsafe_allow_html=True)
 
 with overview_col:
     with st.expander("What you can craft right now", expanded=active_section == "Craft now"):
