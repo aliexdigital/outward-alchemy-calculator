@@ -124,7 +124,21 @@ def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
     assert "api.getDashboard(" in app_source
     assert "api.getOverview(" not in app_source
     assert "api.getInventory(" not in app_source
-    assert 'if (!metadata || activeSection !== "Craft now") return;' in app_source
+    assert 'if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;' in app_source
+
+
+def test_bootstrap_does_not_block_the_shell_on_secondary_panel_fetches() -> None:
+    app_source = read_frontend("App.tsx")
+    bootstrap_start = app_source.index("async function bootstrap() {")
+    bootstrap_end = app_source.index("void bootstrap();", bootstrap_start)
+    bootstrap_block = app_source[bootstrap_start:bootstrap_end]
+
+    assert "const [hasBootstrapped, setHasBootstrapped] = useState(false);" in app_source
+    assert "await api.getMetadata()" in bootstrap_block
+    assert "await refreshCraftNow(" not in bootstrap_block
+    assert "await api.getDashboard(" not in bootstrap_block
+    assert "setHasBootstrapped(true);" in app_source
+    assert "setIsLoading(false);" in app_source
 
 
 def test_inventory_mutations_share_one_refresh_contract_including_imports() -> None:
@@ -132,10 +146,11 @@ def test_inventory_mutations_share_one_refresh_contract_including_imports() -> N
 
     assert "const refreshInventoryDrivenViews = useCallback(async () => {" in app_source
     assert "refreshSharedPanels(selectedStations, nearThreshold)" in app_source
+    assert 'if (activeSection === "Craft now")' in app_source
     assert "refreshCraftNow(selectedStations, sortMode, nearThreshold)" in app_source
-    assert "if (plannerRequested && planTarget)" in app_source
+    assert "if (plannerRequested && planTarget.trim())" in app_source
     assert "refreshes.push(executePlanner())" in app_source
-    assert "if (shoppingRequested)" in app_source
+    assert "if (shoppingRequested && parseShoppingTargets(shoppingText).length)" in app_source
     assert "refreshes.push(executeShoppingList())" in app_source
     assert "await refreshInventoryDrivenViews();" in app_source
     assert "handleInventoryMutation(api.importText(bulkText))" in app_source
@@ -148,6 +163,24 @@ def test_inventory_mutations_invalidate_stale_planner_and_shopping_output_before
 
     assert "if (plannerRequested) setPlannerResult(null);" in app_source
     assert "if (shoppingRequested) setShoppingResult(null);" in app_source
+    assert "Promise.allSettled(refreshes)" in app_source
+
+
+def test_global_loading_state_is_not_tied_to_secondary_panel_refreshes() -> None:
+    app_source = read_frontend("App.tsx")
+
+    assert app_source.count("setIsLoading(") == 1
+    assert "const [isLoading, setIsLoading] = useState(true);" in app_source
+
+
+def test_refresh_helper_stays_one_way_and_does_not_call_inventory_mutation_recursively() -> None:
+    app_source = read_frontend("App.tsx")
+
+    refresh_start = app_source.index("const refreshInventoryDrivenViews = useCallback(async () => {")
+    refresh_end = app_source.index("const handleInventoryMutation = useCallback(", refresh_start)
+    refresh_block = app_source[refresh_start:refresh_end]
+
+    assert "handleInventoryMutation(" not in refresh_block
 
 
 def test_craft_now_main_view_contains_the_full_craftable_table_and_sort_control() -> None:

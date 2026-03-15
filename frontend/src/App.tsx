@@ -129,6 +129,7 @@ export default function App() {
   const [databaseCategories, setDatabaseCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasBootstrapped, setHasBootstrapped] = useState(false);
 
   const deferredQuickAddValue = useDeferredValue(quickAddValue);
   const deferredDatabaseSearch = useDeferredValue(databaseSearch);
@@ -181,33 +182,30 @@ export default function App() {
         setDatabaseStations(nextStations);
         setDatabaseCategories(nextRecipeCategories);
         setPlanTarget(recipeTargets[0] ?? "");
-
-        const dashboardData = await api.getDashboard(nextStations, 2);
-        applyDashboard(dashboardData);
-        await refreshCraftNow(nextStations, "Smart score", 2);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load app data.");
       } finally {
+        setHasBootstrapped(true);
         setIsLoading(false);
       }
     }
 
     void bootstrap();
-  }, [applyDashboard, refreshCraftNow]);
+  }, []);
 
   useEffect(() => {
-    if (!metadata) return;
+    if (!hasBootstrapped || !metadata) return;
     void refreshSharedPanels(selectedStations, nearThreshold).catch((err) => {
       setError(err instanceof Error ? err.message : "Failed to refresh calculator results.");
     });
-  }, [metadata, nearThreshold, refreshSharedPanels, selectedStations]);
+  }, [hasBootstrapped, metadata, nearThreshold, refreshSharedPanels, selectedStations]);
 
   useEffect(() => {
-    if (!metadata || activeSection !== "Craft now") return;
+    if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;
     void refreshCraftNow(selectedStations, sortMode, nearThreshold).catch((err) => {
       setError(err instanceof Error ? err.message : "Failed to refresh the craftable list.");
     });
-  }, [activeSection, metadata, nearThreshold, refreshCraftNow, selectedStations, sortMode]);
+  }, [activeSection, hasBootstrapped, metadata, nearThreshold, refreshCraftNow, selectedStations, sortMode]);
 
   const inventoryMap = useMemo(() => {
     const map = new Map<string, number>();
@@ -310,18 +308,23 @@ export default function App() {
   }, [plannerDepth, selectedStations, shoppingText]);
 
   const refreshInventoryDrivenViews = useCallback(async () => {
-    const refreshes: Promise<unknown>[] = [
-      refreshSharedPanels(selectedStations, nearThreshold),
-      refreshCraftNow(selectedStations, sortMode, nearThreshold),
-    ];
-    if (plannerRequested && planTarget) {
+    const refreshes: Promise<unknown>[] = [refreshSharedPanels(selectedStations, nearThreshold)];
+    if (activeSection === "Craft now") {
+      refreshes.push(refreshCraftNow(selectedStations, sortMode, nearThreshold));
+    }
+    if (plannerRequested && planTarget.trim()) {
       refreshes.push(executePlanner());
     }
-    if (shoppingRequested) {
+    if (shoppingRequested && parseShoppingTargets(shoppingText).length) {
       refreshes.push(executeShoppingList());
     }
-    await Promise.all(refreshes);
+    const results = await Promise.allSettled(refreshes);
+    const failedRefresh = results.find((result) => result.status === "rejected");
+    if (failedRefresh?.status === "rejected") {
+      throw failedRefresh.reason;
+    }
   }, [
+    activeSection,
     executePlanner,
     executeShoppingList,
     nearThreshold,
@@ -330,6 +333,7 @@ export default function App() {
     refreshCraftNow,
     refreshSharedPanels,
     selectedStations,
+    shoppingText,
     shoppingRequested,
     sortMode,
   ]);
