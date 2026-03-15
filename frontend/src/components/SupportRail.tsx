@@ -19,9 +19,6 @@ export function SupportRail({
   nearThreshold,
   onNearThresholdChange,
   stationFilterNote,
-  bulkText,
-  onBulkTextChange,
-  onImportText,
   onBulkFile,
 }: {
   leftCollapsed: boolean;
@@ -37,9 +34,6 @@ export function SupportRail({
   nearThreshold: number;
   onNearThresholdChange: (value: number) => void;
   stationFilterNote: string;
-  bulkText: string;
-  onBulkTextChange: (value: string) => void;
-  onImportText: () => void;
   onBulkFile: (file: File | null) => void;
 }) {
   return (
@@ -151,23 +145,14 @@ export function SupportRail({
 
           <Panel
             title="Bulk add inventory"
-            description="Paste text or upload CSV / Excel."
+            description="Upload a CSV or Excel inventory file."
             className="panel-section accordion-item"
             collapsible
             collapsed={!railSections.bulk}
             onToggle={() => onToggleSection("bulk")}
           >
-            <textarea
-              className="bulk-text compact-text"
-              value={bulkText}
-              onChange={(event) => onBulkTextChange(event.target.value)}
-              placeholder={"Gravel Beetle,2\nClean Water,4"}
-            />
-            <div className="inline-actions">
-              <button type="button" className="button subtle" onClick={onImportText}>
-                Paste text
-              </button>
-              <label className="button subtle file-button">
+            <div className="upload-stack">
+              <label className="button subtle file-button bulk-upload-button">
                 Upload CSV / Excel
                 <input
                   type="file"
@@ -175,6 +160,7 @@ export function SupportRail({
                   onChange={(event: ChangeEvent<HTMLInputElement>) => onBulkFile(event.target.files?.[0] ?? null)}
                 />
               </label>
+              <small className="field-note">Use the app&apos;s exported `item,qty` file or another matching sheet.</small>
             </div>
           </Panel>
 

@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 import pandas as pd
 import requests
@@ -15,6 +15,7 @@ from openpyxl.utils import get_column_letter
 
 
 BASE_URL = os.getenv("OUTWARD_WIKI_BASE", "https://outward.wiki.gg").rstrip("/")
+ITEM_METADATA_BASE_URL = os.getenv("OUTWARD_ITEM_WIKI_BASE", "https://outward.fandom.com").rstrip("/")
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
@@ -41,8 +42,9 @@ def slug_key(text: str) -> str:
 
 
 
-def detect_api_endpoint(session: requests.Session) -> str:
-    for endpoint in [f"{BASE_URL}/api.php", f"{BASE_URL}/w/api.php"]:
+def detect_api_endpoint(session: requests.Session, base_url: Optional[str] = None) -> str:
+    target_base = (base_url or BASE_URL).rstrip("/")
+    for endpoint in [f"{target_base}/api.php", f"{target_base}/w/api.php"]:
         try:
             r = session.get(endpoint, params={
                 "action": "query",
@@ -54,7 +56,7 @@ def detect_api_endpoint(session: requests.Session) -> str:
                 return endpoint
         except Exception:
             pass
-    raise RuntimeError(f"Could not find a working MediaWiki API endpoint on {BASE_URL}")
+    raise RuntimeError(f"Could not find a working MediaWiki API endpoint on {target_base}")
 
 
 
@@ -214,6 +216,115 @@ def parse_group_members(html: str, page_title: str) -> List[str]:
     return cleaned
 
 
+def parse_number(value: str) -> float:
+    match = re.search(r"-?\d+(?:\.\d+)?", normalize(value).replace(",", ""))
+    return float(match.group(0)) if match else 0.0
+
+
+def normalize_item_category(raw: str, item_name: str) -> str:
+    value = normalize(raw)
+    lowered = slug_key(f"{value} {item_name}")
+    if any(token in lowered for token in ["tea"]):
+        return "Tea"
+    if any(token in lowered for token in ["potion", "elixir"]):
+        return "Potion"
+    if any(token in lowered for token in ["tent", "lodge", "bedroll", "cocoon", "cage", "deployable"]):
+        return "Deployable"
+    if any(token in lowered for token in ["food", "meal", "sandwich", "pie", "tartine", "stew", "omelet", "potage", "ration"]):
+        return "Food"
+    if any(token in lowered for token in ["ingredient", "fish", "meat", "mushroom", "vegetable", "water"]):
+        return "Cooking ingredients"
+    if any(token in lowered for token in ["material", "crafting material", "resource"]):
+        return "Materials"
+    return value
+
+
+def parse_infobox_rows(soup: BeautifulSoup) -> Dict[str, str]:
+    infobox = soup.find("aside", class_=lambda value: isinstance(value, str) and "portable-infobox" in value)
+    rows: Dict[str, str] = {}
+    if infobox is None:
+        return rows
+
+    for row in infobox.find_all(attrs={"data-source": True}):
+        label = normalize(str(row.get("data-source", "")).replace("_", " "))
+        value = normalize(" ".join(row.stripped_strings))
+        if label and value:
+            rows[label] = value
+
+    if rows:
+        return rows
+
+    for row in infobox.select(".pi-item.pi-data, .portable-infobox .pi-item.pi-data"):
+        label_tag = row.select_one(".pi-data-label, .pi-item-label")
+        value_tag = row.select_one(".pi-data-value, .pi-item-value")
+        label = normalize(" ".join(label_tag.stripped_strings)) if label_tag else ""
+        value = normalize(" ".join(value_tag.stripped_strings)) if value_tag else ""
+        if label and value:
+            rows[label] = value
+    return rows
+
+
+def parse_effect_rows(soup: BeautifulSoup) -> List[str]:
+    headings = {"effects", "effect", "item effects", "status effects", "special effects"}
+    effects: List[str] = []
+    seen = set()
+
+    for heading in soup.find_all(["h2", "h3", "h4"]):
+        heading_text = normalize(" ".join(heading.stripped_strings)).replace("[edit]", "")
+        if slug_key(heading_text) not in headings:
+            continue
+        for sibling in heading.next_siblings:
+            if isinstance(sibling, Tag) and sibling.name in {"h2", "h3", "h4"}:
+                break
+            if not isinstance(sibling, Tag):
+                continue
+            candidates = sibling.find_all("li") or [sibling]
+            for candidate in candidates:
+                text = normalize(" ".join(candidate.stripped_strings))
+                if not text or text in DLC_BADGES:
+                    continue
+                key_text = slug_key(text)
+                if key_text in seen:
+                    continue
+                seen.add(key_text)
+                effects.append(text)
+        if effects:
+            break
+    return effects
+
+
+def parse_item_metadata_page(item_name: str, html: str) -> Dict[str, object]:
+    soup = BeautifulSoup(html, "html.parser")
+    info_rows = parse_infobox_rows(soup)
+    metadata: Dict[str, object] = {}
+
+    category_value = ""
+    for key_name, value in info_rows.items():
+        key_name_slug = slug_key(key_name)
+        if key_name_slug in {"type", "item type", "category", "consumable type"}:
+            category_value = value
+        elif key_name_slug == "weight":
+            metadata["weight"] = parse_number(value)
+        elif key_name_slug in {"sells for", "sell price", "sell value", "sell", "value"}:
+            metadata["sale_value"] = parse_number(value)
+        elif key_name_slug in {"buys for", "buy price", "buy value", "buy"}:
+            metadata["buy_value"] = parse_number(value)
+
+    if category_value:
+        metadata["category"] = normalize_item_category(category_value, item_name)
+
+    effects = parse_effect_rows(soup)
+    if not effects:
+        for key_name, value in info_rows.items():
+            if slug_key(key_name) in {"effect", "effects", "status effects", "item effects"}:
+                effects = [normalize(part) for part in re.split(r"[;•]", value) if normalize(part)]
+                break
+    if effects:
+        metadata["effects"] = effects
+
+    return metadata
+
+
 
 def build_item_index(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]) -> pd.DataFrame:
     produced = recipes_df[["result"]].drop_duplicates().rename(columns={"result": "item"})
@@ -230,6 +341,19 @@ def build_item_index(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]) -> 
     all_items["is_recipe_output"] = all_items["item"].apply(lambda x: slug_key(x) in produced_keys)
     all_items["is_group_token"] = all_items["item"].apply(lambda x: slug_key(x) in group_keys)
     return all_items.reset_index(drop=True)
+
+
+def sync_item_metadata(session: requests.Session, api_endpoint: str, item_names: List[str]) -> Dict[str, dict]:
+    metadata: Dict[str, dict] = {}
+    for item_name in item_names:
+        try:
+            html = fetch_page_html(session, api_endpoint, item_name)
+            parsed = parse_item_metadata_page(item_name, html)
+            if parsed:
+                metadata[item_name] = parsed
+        except Exception as exc:
+            print(f"  -> warning: failed to parse metadata page {item_name}: {exc}")
+    return metadata
 
 
 
@@ -390,12 +514,25 @@ def main() -> None:
             print(f"  -> warning: failed to parse group page {title}: {exc}")
 
     (DATA_DIR / "ingredient_groups.json").write_text(json.dumps(groups, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    item_session = requests.Session()
+    item_session.headers.update(HEADERS)
+    item_api_endpoint = detect_api_endpoint(item_session, ITEM_METADATA_BASE_URL)
+    print(f"Using item metadata endpoint: {item_api_endpoint}")
+    item_names = build_item_index(recipes_df, groups).loc[lambda frame: ~frame["is_group_token"], "item"].tolist()
+    item_metadata = sync_item_metadata(item_session, item_api_endpoint, item_names)
+    (DATA_DIR / "item_metadata.generated.json").write_text(
+        json.dumps(item_metadata, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
     workbook_path = Path(__file__).resolve().parent / "outward_crafting.xlsx"
     build_workbook(recipes_df, groups, workbook_path)
 
     print("Done.")
     print(f"Wrote {DATA_DIR / 'recipes.csv'}")
     print(f"Wrote {DATA_DIR / 'ingredient_groups.json'}")
+    print(f"Wrote {DATA_DIR / 'item_metadata.generated.json'}")
     print(f"Wrote {workbook_path}")
 
 

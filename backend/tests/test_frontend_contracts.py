@@ -104,9 +104,9 @@ def test_results_rail_surfaces_real_score_and_missing_groups() -> None:
     assert "row.smart_score" in views_source
     assert 'title="Real smart-score ranking"' in views_source
     assert "slotLabel(row.missing_slots)" in views_source
-    assert "BEST_DIRECT_PREVIEW = 5" in results_source
-    assert "NEAR_PREVIEW = 6" in results_source
-    assert "Show less" in results_source
+    assert "Show more" not in results_source
+    assert "Show less" not in results_source
+    assert 'className="results-preview"' in results_source
 
 
 def test_ingredient_lists_render_with_commas() -> None:
@@ -155,7 +155,7 @@ def test_inventory_mutations_share_one_refresh_contract_including_imports() -> N
     assert "if (shoppingRequested && parseShoppingTargets(shoppingText).length)" in app_source
     assert "refreshes.push(executeShoppingList())" in app_source
     assert "await refreshInventoryDrivenViews();" in app_source
-    assert "handleInventoryMutation(api.importText(bulkText))" in app_source
+    assert "api.importText(" not in app_source
     assert "handleInventoryMutation(api.importCsv(file))" in app_source
     assert "handleInventoryMutation(api.importExcel(file))" in app_source
 
@@ -200,6 +200,8 @@ def test_inventory_editor_reads_overview_and_table_from_live_inventory_state() -
     assert "inventory?.total_quantity ?? 0" in editor_source
     assert "inventoryMap.get(row.item) ?? 0" in editor_source
     assert "filteredCatalogRows.length" in editor_source
+    assert "<th>Buffs</th>" in editor_source
+    assert 'row.effects || "—"' in editor_source
 
 
 def test_pills_and_buttons_keep_text_on_one_line_in_css() -> None:
@@ -232,10 +234,10 @@ def test_long_result_lists_use_internal_scroll_containers_without_changing_colum
     results_source = read_frontend("components/ResultsRail.tsx")
 
     assert ".results-preview {" in css
-    assert "max-height: clamp(14rem, 28vh, 20rem);" in css
-    assert "overflow: auto;" in css
+    assert "max-height: clamp(16rem, 33vh, 22rem);" in css
+    assert "overflow-y: auto;" in css
     assert ".results-rail .craft-table-shell {" in css
-    assert "min-height: 11.5rem;" in css
+    assert "min-height: 13rem;" in css
     assert "display: grid;" not in css[css.index(".utility-rail__scroll {"):css.index(".main-column,")]
     assert "grid-template-columns:" in css
     assert "clamp(250px, 18vw, 290px)" in css
@@ -288,6 +290,27 @@ def test_right_rail_cards_are_collapsible_and_can_stay_open_independently() -> N
     assert ".accordion-trigger {" in css
     assert ".right-column .accordion-panel {" in css
     assert ".rail-card {" in css
+    assert "Show more" not in results_source
+
+
+def test_bulk_add_card_keeps_only_the_upload_action() -> None:
+    support_rail_source = read_frontend("components/SupportRail.tsx")
+    css = read_frontend("styles/app.css")
+
+    assert "Paste text" not in support_rail_source
+    assert "Upload CSV / Excel" in support_rail_source
+    assert 'className="upload-stack"' in support_rail_source
+    assert ".upload-stack {" in css
+    assert ".bulk-upload-button {" in css
+
+
+def test_scrollbars_are_thin_and_scoped_to_scroll_regions() -> None:
+    css = read_frontend("styles/app.css")
+
+    assert "scrollbar-width: thin;" in css
+    assert "::-webkit-scrollbar" in css
+    assert "width: 6px;" in css
+    assert "background: rgba(255, 120, 200, 0.28);" in css
 
 
 def test_banner_is_full_width_and_centered_in_css() -> None:

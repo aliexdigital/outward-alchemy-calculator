@@ -7,6 +7,7 @@ type InventoryCatalogRow = {
   item: string;
   category: string;
   qty: number;
+  effects: string;
 };
 
 export function InventoryEditor({
@@ -152,6 +153,7 @@ export function InventoryEditor({
                     <th>Have it</th>
                     <th>Ingredient</th>
                     <th>Category</th>
+                    <th>Buffs</th>
                     <th>Qty</th>
                     <th>Apply</th>
                     <th>Remove</th>
@@ -173,6 +175,11 @@ export function InventoryEditor({
                         </td>
                         <td>{row.item}</td>
                         <td>{row.category}</td>
+                        <td>
+                          <span className="buffs-cell" title={row.effects || "None"}>
+                            {row.effects || "—"}
+                          </span>
+                        </td>
                         <td>
                           <input
                             className="qty-input"

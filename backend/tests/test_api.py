@@ -405,6 +405,24 @@ def test_metadata_exposes_recipe_database_groups_and_item_stats() -> None:
     assert metadata["recipes"]
     assert metadata["ingredient_groups"]
     assert metadata["item_stats"]
+    stats = item_stat_map(metadata["item_stats"])
+    assert "Clean Water" in stats
+    assert stats["Clean Water"]["category"] == "Cooking ingredients"
+    assert stats["Clean Water"]["effects"] == ""
+
+
+def test_verified_item_metadata_fields_are_exposed_in_item_stats() -> None:
+    client = make_client()
+
+    metadata = client.get("/api/metadata").json()
+    stats = item_stat_map(metadata["item_stats"])
+
+    assert stats["Astral Potion"]["buy_value"] == 25
+    assert stats["Astral Potion"]["weight"] == 0.5
+    assert "Restores 20 Burnt Mana" in stats["Astral Potion"]["effects"]
+    assert stats["Great Astral Potion"]["mana"] == 100
+    assert "Health Recovery 3" in stats["Meat Stew"]["effects"]
+    assert "Mana Recovery 3" in stats["Turmmip Potage"]["effects"]
 
 
 def test_inventory_can_grow_past_46_unique_entries_and_duplicates_still_aggregate() -> None:

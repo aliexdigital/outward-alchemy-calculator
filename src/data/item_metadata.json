@@ -25,15 +25,19 @@
   },
   "Astral Potion": {
     "category": "Potion",
-    "mana": 40,
-    "sale_value": 30,
-    "effects": ["Restores mana"]
+    "mana": 50,
+    "sale_value": 8,
+    "buy_value": 25,
+    "weight": 0.5,
+    "effects": ["Restores 50% Mana", "Restores 20 Burnt Mana", "Restores 90 Drink"]
   },
   "Great Astral Potion": {
     "category": "Potion",
-    "mana": 70,
-    "sale_value": 48,
-    "effects": ["Strong mana restoration"]
+    "mana": 100,
+    "sale_value": 18,
+    "buy_value": 60,
+    "weight": 0.5,
+    "effects": ["Restores 100% Mana", "Restores 20 Burnt Mana"]
   },
   "Energizing Potion": {
     "category": "Potion",
@@ -162,8 +166,10 @@
     "category": "Food",
     "heal": 24,
     "stamina": 18,
-    "sale_value": 12,
-    "effects": ["Hearty meal for health and stamina"]
+    "sale_value": 1,
+    "buy_value": 3,
+    "weight": 0.5,
+    "effects": ["Health Recovery 3"]
   },
   "Savage Stew": {
     "category": "Food",
@@ -249,8 +255,10 @@
   "Turmmip Potage": {
     "category": "Food",
     "mana": 20,
-    "sale_value": 12,
-    "effects": ["Vegetable soup with mana support"]
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 0.5,
+    "effects": ["Mana Recovery 3", "Removes Cold (Disease)"]
   },
   "Pouding Chomeur": {
     "category": "Food",

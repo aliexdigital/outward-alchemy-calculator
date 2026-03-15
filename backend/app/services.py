@@ -44,26 +44,26 @@ def _load_raw_groups() -> Dict[str, List[str]]:
 
 
 def _load_item_metadata() -> Dict[str, dict]:
-    path = DATA_DIR / "item_metadata.json"
-    if not path.exists():
-        return {}
-    raw = json.loads(path.read_text(encoding="utf-8"))
     out: Dict[str, dict] = {}
-    for item_name, meta in raw.items():
-        effects = meta.get("effects", [])
-        if isinstance(effects, str):
-            effects = [effects]
-        out[core.key(item_name)] = {
-            "item": core.normalize(item_name),
-            "heal": float(meta.get("heal", 0) or 0),
-            "stamina": float(meta.get("stamina", 0) or 0),
-            "mana": float(meta.get("mana", 0) or 0),
-            "sale_value": float(meta.get("sale_value", 0) or 0),
-            "buy_value": float(meta.get("buy_value", 0) or 0),
-            "weight": float(meta.get("weight", 0) or 0),
-            "effects": [core.normalize(effect) for effect in effects if core.normalize(effect)],
-            "category": core.normalize(meta.get("category", "")),
-        }
+    for path in [DATA_DIR / "item_metadata.generated.json", DATA_DIR / "item_metadata.json"]:
+        if not path.exists():
+            continue
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        for item_name, meta in raw.items():
+            effects = meta.get("effects", [])
+            if isinstance(effects, str):
+                effects = [effects]
+            out[core.key(item_name)] = {
+                "item": core.normalize(item_name),
+                "heal": float(meta.get("heal", 0) or 0),
+                "stamina": float(meta.get("stamina", 0) or 0),
+                "mana": float(meta.get("mana", 0) or 0),
+                "sale_value": float(meta.get("sale_value", 0) or 0),
+                "buy_value": float(meta.get("buy_value", 0) or 0),
+                "weight": float(meta.get("weight", 0) or 0),
+                "effects": [core.normalize(effect) for effect in effects if core.normalize(effect)],
+                "category": core.normalize(meta.get("category", "")),
+            }
     return out
 
 
@@ -416,5 +416,5 @@ class CalculatorService:
                 {"group": group_name, "members": members, "member_count": len(members)}
                 for group_name, members in sorted(self.data.groups.items())
             ],
-            "item_stats": _df_records(core.build_metadata_table(self.data.item_metadata)),
+            "item_stats": _df_records(core.build_metadata_table(self.data.item_metadata, self.data.item_catalog)),
         }

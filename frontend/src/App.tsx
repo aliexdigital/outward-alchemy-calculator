@@ -118,7 +118,6 @@ export default function App() {
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [planTarget, setPlanTarget] = useState("");
   const [shoppingText, setShoppingText] = useState("Life Potion,3\nWarm Potion,2");
-  const [bulkText, setBulkText] = useState("");
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [plannerRequested, setPlannerRequested] = useState(false);
   const [shoppingRequested, setShoppingRequested] = useState(false);
@@ -211,6 +210,12 @@ export default function App() {
     return map;
   }, [inventory]);
 
+  const itemStatsMap = useMemo(() => {
+    const map = new Map<string, MetadataResponse["item_stats"][number]>();
+    (metadata?.item_stats ?? []).forEach((row) => map.set(row.item, row));
+    return map;
+  }, [metadata]);
+
   const allCatalogRows = useMemo(() => {
     if (!metadata) return [];
     return metadata.categories.flatMap((category) =>
@@ -218,9 +223,10 @@ export default function App() {
         item,
         category: category.name,
         qty: inventoryMap.get(item) ?? 0,
+        effects: itemStatsMap.get(item)?.effects ?? "",
       })),
     );
-  }, [metadata, inventoryMap]);
+  }, [itemStatsMap, inventoryMap, metadata]);
 
   const filteredCatalogRows = useMemo(() => {
     const search = deferredQuickAddValue.trim().toLowerCase();
@@ -437,9 +443,6 @@ export default function App() {
           nearThreshold={nearThreshold}
           onNearThresholdChange={setNearThreshold}
           stationFilterNote={stationFilterNote}
-          bulkText={bulkText}
-          onBulkTextChange={setBulkText}
-          onImportText={() => void handleInventoryMutation(api.importText(bulkText))}
           onBulkFile={(file) => void handleBulkFile(file)}
         />
 

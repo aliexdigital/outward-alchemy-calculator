@@ -1003,19 +1003,24 @@ def build_shopping_list(
     return total_missing, lines, working_inventory
 
 
-def build_metadata_table(metadata: Dict[str, dict]) -> pd.DataFrame:
+def build_metadata_table(metadata: Dict[str, dict], catalog: Optional[List[str]] = None) -> pd.DataFrame:
     rows = []
-    for _, meta in sorted(metadata.items(), key=lambda pair: pair[1]["item"]):
+    catalog_items = {normalize(item_name) for item_name in (catalog or []) if normalize(item_name)}
+    known_items = {meta["item"] for meta in metadata.values()}
+    ordered_items = sorted(known_items | catalog_items)
+
+    for item_name in ordered_items:
+        meta = item_meta_for(item_name, metadata)
         rows.append(
             {
                 "item": meta["item"],
-                "category": meta["category"],
+                "category": meta["category"] or infer_item_category(item_name, metadata),
                 "heal": meta["heal"],
                 "stamina": meta["stamina"],
                 "mana": meta["mana"],
                 "sale_value": meta["sale_value"],
                 "buy_value": meta["buy_value"],
-                "weight": _inferred_weight(meta["item"], meta["category"], meta["weight"]),
+                "weight": _inferred_weight(meta["item"], meta["category"] or infer_item_category(item_name, metadata), meta["weight"]),
                 "effects": "; ".join(meta["effects"]),
             }
         )
