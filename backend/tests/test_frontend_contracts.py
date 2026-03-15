@@ -7,8 +7,12 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
+def read_frontend(path: str) -> str:
+    return (BASE_DIR / "frontend" / "src" / path).read_text(encoding="utf-8")
+
+
 def test_view_config_maps_tabs_to_expected_logic() -> None:
-    config = json.loads((BASE_DIR / "frontend" / "src" / "view-config.json").read_text(encoding="utf-8"))
+    config = json.loads(read_frontend("view-config.json"))
     mapping = {entry["id"]: entry["logic"] for entry in config}
 
     assert mapping == {
@@ -25,7 +29,7 @@ def test_view_config_maps_tabs_to_expected_logic() -> None:
 
 
 def test_planning_controls_contract_spells_out_panel_impact() -> None:
-    controls = json.loads((BASE_DIR / "frontend" / "src" / "planning-controls.json").read_text(encoding="utf-8"))
+    controls = json.loads(read_frontend("planning-controls.json"))
     control_map = {entry["id"]: entry["affects"] for entry in controls}
 
     assert control_map["stations"] == ["Craft now", "Missing ingredients", "Plan a target", "Shopping list"]
@@ -33,8 +37,21 @@ def test_planning_controls_contract_spells_out_panel_impact() -> None:
     assert control_map["near_threshold"] == ["Missing ingredients", "Craft now"]
 
 
+def test_gemini_shell_components_exist_and_app_uses_them() -> None:
+    app_source = read_frontend("App.tsx")
+
+    assert 'import { InventoryEditor } from "./components/InventoryEditor";' in app_source
+    assert 'import { ResultsRail } from "./components/ResultsRail";' in app_source
+    assert 'import { SupportRail } from "./components/SupportRail";' in app_source
+    assert 'import { TopBanner } from "./components/TopBanner";' in app_source
+    assert "<TopBanner" in app_source
+    assert "<SupportRail" in app_source
+    assert "<ResultsRail" in app_source
+    assert "<InventoryEditor" in app_source
+
+
 def test_sidebar_collapse_layout_contract_exists_in_css() -> None:
-    css = (BASE_DIR / "frontend" / "src" / "styles" / "app.css").read_text(encoding="utf-8")
+    css = read_frontend("styles/app.css")
 
     assert ".app-shell.left-collapsed" in css
     assert "grid-template-columns: var(--rail-collapsed-width)" in css
@@ -42,40 +59,51 @@ def test_sidebar_collapse_layout_contract_exists_in_css() -> None:
     assert ".rail-toggle" in css
 
 
-def test_direct_result_sections_are_clearly_distinguished() -> None:
-    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+def test_left_rail_sections_are_individually_collapsible() -> None:
+    support_rail_source = read_frontend("components/SupportRail.tsx")
+    ui_source = read_frontend("components/ui.tsx")
 
-    assert "Best direct options" in app_source
-    assert "All craftable results" in app_source
-    assert 'title="Craft now"' in app_source
+    assert 'type RailSectionId = "snapshot" | "planning" | "how" | "bulk" | "data";' in support_rail_source
+    assert 'onToggleSection("snapshot")' in support_rail_source
+    assert 'onToggleSection("planning")' in support_rail_source
+    assert 'onToggleSection("how")' in support_rail_source
+    assert 'onToggleSection("bulk")' in support_rail_source
+    assert 'onToggleSection("data")' in support_rail_source
+    assert 'className="panel-toggle"' in ui_source
+    assert "Support rail" not in support_rail_source
+    assert "Quick tools" not in support_rail_source
+
+
+def test_direct_result_sections_are_clearly_distinguished() -> None:
+    app_source = read_frontend("App.tsx")
+    results_source = read_frontend("components/ResultsRail.tsx")
+
+    assert 'title="Best direct options"' in results_source
+    assert 'title="Almost craftable"' in results_source
+    assert 'title="Full craftable list"' in app_source
     assert "What you can craft right now" not in app_source
 
 
-def test_left_rail_sections_are_individually_collapsible() -> None:
-    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+def test_near_craft_views_use_missing_summary_without_slots_column() -> None:
+    views_source = read_frontend("components/data-views.tsx")
 
-    assert 'const [railSections, setRailSections] = useState<Record<RailSectionId, boolean>>' in app_source
-    assert 'toggleRailSection("snapshot")' in app_source
-    assert 'toggleRailSection("planning")' in app_source
-    assert 'toggleRailSection("how")' in app_source
-    assert 'toggleRailSection("bulk")' in app_source
-    assert 'toggleRailSection("data")' in app_source
-    assert "className=\"panel-toggle\"" in app_source
-    assert "Support rail" not in app_source
-    assert "Quick tools" not in app_source
+    assert "<th>Still missing</th>" in views_source
+    assert "<th>Station</th>" in views_source
+    assert "<th>Slots</th>" not in views_source
+    assert "row.missing_items" in views_source
+    assert "Any Water" not in views_source
 
 
-def test_near_craft_table_uses_missing_summary_without_slots_column() -> None:
-    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+def test_results_rail_surfaces_real_score_and_missing_groups() -> None:
+    views_source = read_frontend("components/data-views.tsx")
 
-    assert "<th>Still missing</th>" in app_source
-    assert "<th>Station</th>" in app_source
-    assert "<th>Slots</th>" not in app_source
-    assert "missing-summary" in app_source
+    assert "row.smart_score" in views_source
+    assert 'title="Real smart-score ranking"' in views_source
+    assert "slotLabel(row.missing_slots)" in views_source
 
 
 def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
-    app_source = (BASE_DIR / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
+    app_source = read_frontend("App.tsx")
 
     assert app_source.count("api.getMetadata(") == 1
     assert "api.getDashboard(" in app_source
@@ -85,7 +113,7 @@ def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
 
 
 def test_banner_is_full_width_and_centered_in_css() -> None:
-    css = (BASE_DIR / "frontend" / "src" / "styles" / "app.css").read_text(encoding="utf-8")
+    css = read_frontend("styles/app.css")
 
     assert ".app-banner" in css
     assert "text-align: center" in css
