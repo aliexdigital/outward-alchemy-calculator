@@ -97,6 +97,21 @@ CANONICAL_GROUPS: Dict[str, List[str]] = {
     "basic boots": ["Makeshift Leather Boots"],
     "basic helm": ["Makeshift Leather Hat"],
     "bread (any)": ["Bread", "Bread Of The Wild", "Toast"],
+    "advanced tent": [
+        "Advanced Tent",
+        "Luxury Tent",
+        "Mage Tent",
+        "Fur Tent",
+        "Camouflaged Tent",
+        "Plant Tent",
+        "Calygrey Bone Cage",
+        "Scourge Cocoon",
+        "Corruption Totemic Lodge",
+        "Ethereal Totemic Lodge",
+        "Fire Totemic Lodge",
+        "Ice Totemic Lodge",
+        "Lightning Totemic Lodge",
+    ],
 }
 
 
@@ -184,13 +199,17 @@ def prune_invalid_recipes(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]
     return valid_rows.reset_index(drop=True)
 
 
-def build_item_catalog(recipes_df: pd.DataFrame, groups: Dict[str, List[str]]) -> List[str]:
+def build_item_catalog(recipes_df: pd.DataFrame, groups: Dict[str, List[str]], metadata: Optional[Dict[str, dict]] = None) -> List[str]:
     items = set()
     for _, row in recipes_df.iterrows():
         items.add(row["result"])
         items.update(row["ingredient_list"])
     for members in groups.values():
         items.update(members)
+    for meta in (metadata or {}).values():
+        item_name = normalize(meta.get("item"))
+        if item_name:
+            items.add(item_name)
     return sorted(item for item in items if item and key(item) not in groups)
 
 
@@ -203,6 +222,8 @@ def item_meta_for(item_name: str, metadata: Dict[str, dict]) -> dict:
             "stamina": 0.0,
             "mana": 0.0,
             "sale_value": 0.0,
+            "buy_value": 0.0,
+            "weight": 0.0,
             "effects": [],
             "category": "",
         },
@@ -215,11 +236,15 @@ def infer_item_category(item_name: str, metadata: Dict[str, dict]) -> str:
         category = meta["category"]
         if category in {"Potion", "Tea"}:
             return "Potions and Drinks"
+        if category == "Deployable":
+            return "Deployables"
         if category == "Food":
             return "Food"
         return category
 
     name = key(item_name)
+    if any(token in name for token in ["tent", "lodge", "bedroll", "cocoon", "cage"]):
+        return "Deployables"
     if any(token in name for token in ["potion", "elixir", "varnish", "bomb", "incense", "stone", "powder", "charge"]):
         return "Alchemy"
     if any(token in name for token in ["tea", "stew", "pie", "tartine", "sandwich", "omelet", "ration", "jam", "potage", "cake"]):
@@ -237,7 +262,7 @@ def build_catalog_by_category(catalog: List[str], metadata: Dict[str, dict]) -> 
     grouped: Dict[str, List[str]] = {}
     for item_name in catalog:
         grouped.setdefault(infer_item_category(item_name, metadata), []).append(item_name)
-    order = ["Food", "Potions and Drinks", "Cooking ingredients", "Alchemy", "Materials", "Equipment", "Other"]
+    order = ["Food", "Potions and Drinks", "Cooking ingredients", "Alchemy", "Deployables", "Materials", "Equipment", "Other"]
     return {category: sorted(grouped[category]) for category in order if category in grouped}
 
 
@@ -372,6 +397,7 @@ def _missing_label(token: str, groups: Dict[str, List[str]]) -> str:
         "vegetable": "Any Vegetable",
         "mushroom": "Any Mushroom",
         "bread (any)": "Any Bread",
+        "advanced tent": "Any Advanced Tent",
         "ration ingredient": "Any Ration Ingredient",
         "basic armor": "Any Basic Armor",
         "basic boots": "Any Basic Boots",
@@ -384,16 +410,41 @@ def _effect_utility(effects: List[str]) -> float:
     utility = 0.0
     for effect in effects:
         effect_key = key(effect)
-        if "burnt" in effect_key:
-            utility += 6.2
-        if any(token in effect_key for token in ["weather", "resistance", "resist", "protection", "defense", "survival"]):
+        if "burnt health" in effect_key:
+            utility += 7.0
+        elif "burnt mana" in effect_key:
+            utility += 6.8
+        elif "burnt stamina" in effect_key:
+            utility += 6.4
+        elif "burnt" in effect_key:
+            utility += 6.0
+        if any(token in effect_key for token in ["health recovery", "health per second", "recovery from rest"]):
+            utility += 5.0
+        if any(token in effect_key for token in ["weather def", "weather defense", "weather resistance", "cold weather", "hot weather"]):
             utility += 4.8
-        if any(token in effect_key for token in ["boon", "buff"]):
-            utility += 3.9
-        if any(token in effect_key for token in ["travel", "comfort", "utility", "stealth", "alertness"]):
-            utility += 2.5
-        if any(token in effect_key for token in ["restore", "recovery", "healing", "stamina", "mana"]):
-            utility += 1.3
+        has_resistance = " resistance" in effect_key or " resist" in effect_key
+        if any(token in effect_key for token in ["immunity", "resistance up", "impact resistance"]) or (
+            has_resistance and not any(token in effect_key for token in ["-", "weakens", "reduced"])
+        ):
+            utility += 4.2
+        if any(token in effect_key for token in ["boon", "buff", "damage bonus", "stealth", "ambush chance greatly reduced"]):
+            utility += 3.6
+        if any(token in effect_key for token in ["stamina cost", "mana cost"]):
+            utility += 4.0 if "-" in effect_key or "reduced" in effect_key else -1.6
+        if any(token in effect_key for token in ["refills hunger", "refills drink", "refills hunger and drink"]):
+            utility += 4.4
+        if any(token in effect_key for token in ["travel", "comfort", "ally", "utility", "alertness", "support"]):
+            utility += 2.2
+        if any(token in effect_key for token in ["removes", "cures", "restores", "healing", "stamina", "mana"]):
+            utility += 1.2
+        if "ambush chance increased" in effect_key:
+            utility -= 2.8
+        if "cannot be picked back up" in effect_key:
+            utility -= 3.2
+        if any(token in effect_key for token in ["raises corruption", "corruption while sleeping"]):
+            utility -= 4.2
+        if has_resistance and any(token in effect_key for token in ["-", "weakens", "reduced"]):
+            utility -= 4.0
     return utility
 
 
@@ -461,6 +512,8 @@ def _category_utility(category: str) -> float:
         "Tea": 6.0,
         "Potions and Drinks": 6.0,
         "Food": 5.0,
+        "Deployable": 6.3,
+        "Deployables": 6.3,
         "Alchemy": 3.0,
         "Equipment": 2.0,
         "Cooking ingredients": 1.6,
@@ -480,7 +533,35 @@ def _name_utility_bonus(name: str, effects: str) -> float:
         bonus += 1.4
     if any(token in effects_key for token in ["boon", "buff", "restore", "heal", "stamina", "mana", "recovery", "support", "travel"]):
         bonus += 2.4
+    if any(token in name_key for token in ["tent", "lodge", "cocoon", "cage", "bedroll"]):
+        bonus += 2.8
     return bonus
+
+
+def _economic_value(sale_value: float, buy_value: float) -> float:
+    return max(float(sale_value), float(buy_value) * 0.35)
+
+
+def _inferred_weight(item_name: str, category: str, explicit_weight: float) -> float:
+    if explicit_weight > 0:
+        return explicit_weight
+    category_key = normalize(category)
+    name_key = key(item_name)
+    if any(token in name_key for token in ["tent", "lodge", "cocoon", "cage", "bedroll"]):
+        return 5.0
+    if category_key in {"Potion", "Tea", "Potions and Drinks"}:
+        return 0.5
+    if category_key == "Food":
+        return 0.5
+    if category_key == "Cooking ingredients":
+        return 0.25
+    if category_key == "Alchemy":
+        return 0.35
+    if category_key == "Materials":
+        return 0.25
+    if category_key in {"Equipment", "Deployable", "Deployables"}:
+        return 4.0
+    return 1.0
 
 
 def smart_score(row: pd.Series) -> float:
@@ -488,15 +569,26 @@ def smart_score(row: pd.Series) -> float:
     unique_ingredients = len({key(item_name) for item_name in row["ingredient_list"]})
     effects = _effects_list(row["effects"])
     category = row["category"] or infer_item_category(row["result"], {})
+    effective_weight = _inferred_weight(row["result"], category, float(row.get("weight_each", 0) or 0))
+    economic_value = _economic_value(float(row["sale_value_each"]), float(row.get("buy_value_each", 0) or 0))
+    strategic_bonus = 0.0
+    if any("burnt" in effect for effect in map(key, effects)):
+        strategic_bonus += 2.2
+    if any(
+        any(token in effect for token in ["weather", "resistance", "damage bonus", "mana cost", "stamina cost", "stealth", "ambush", "health per second"])
+        for effect in map(key, effects)
+    ):
+        strategic_bonus += 1.8
     per_item_utility = (
         row["heal_each"] * 0.55
         + row["stamina_each"] * 0.5
         + row["mana_each"] * 0.62
-        + row["sale_value_each"] * 0.16
+        + economic_value * 0.12
         + len(effects) * 2.2
         + _effect_utility(effects)
         + _category_utility(category)
         + _name_utility_bonus(row["result"], row["effects"])
+        + strategic_bonus
     )
     throughput_bonus = (
         min(int(row["max_crafts"]), 4) * 1.0
@@ -505,7 +597,15 @@ def smart_score(row: pd.Series) -> float:
         + (int(row["result_qty_per_craft"]) / ingredient_count) * 1.6
     )
     complexity_penalty = ingredient_count * 1.15 + max(0, unique_ingredients - 1) * 0.45
-    score = per_item_utility + throughput_bonus + _station_convenience(row["station"]) - complexity_penalty
+    utility_density = per_item_utility / max(effective_weight, 0.25)
+    value_density = economic_value / max(effective_weight, 0.25)
+    weight_bonus = min(utility_density, 24.0) * 0.34 + min(value_density, 90.0) * 0.07
+    carry_penalty = max(0.0, effective_weight - 0.75) * 0.62
+    if per_item_utility < 5.0 and effective_weight > 2.0:
+        carry_penalty += (effective_weight - 2.0) * 1.1
+    if normalize(category) in {"deployable", "deployables"} and per_item_utility >= 10.0:
+        carry_penalty *= 0.65
+    score = per_item_utility + throughput_bonus + weight_bonus + _station_convenience(row["station"]) - complexity_penalty - carry_penalty
     if per_item_utility <= 1.5:
         score -= 1.0
     return score
@@ -545,12 +645,26 @@ def build_direct_results(
                 "stamina_each": result_meta["stamina"],
                 "mana_each": result_meta["mana"],
                 "sale_value_each": result_meta["sale_value"],
+                "buy_value_each": result_meta["buy_value"],
+                "weight_each": _inferred_weight(
+                    row["result"],
+                    result_meta["category"] or infer_item_category(row["result"], metadata),
+                    result_meta["weight"],
+                ),
                 "effects": "; ".join(result_meta["effects"]),
                 "category": result_meta["category"] or infer_item_category(row["result"], metadata),
                 "healing_total": result_meta["heal"] * max_total_output,
                 "stamina_total": result_meta["stamina"] * max_total_output,
                 "mana_total": result_meta["mana"] * max_total_output,
                 "sale_value_total": result_meta["sale_value"] * max_total_output,
+                "value_per_weight_each": result_meta["sale_value"] / max(
+                    _inferred_weight(
+                        row["result"],
+                        result_meta["category"] or infer_item_category(row["result"], metadata),
+                        result_meta["weight"],
+                    ),
+                    0.25,
+                ),
             }
         )
     out = pd.DataFrame(rows)
@@ -827,6 +941,8 @@ def build_metadata_table(metadata: Dict[str, dict]) -> pd.DataFrame:
                 "stamina": meta["stamina"],
                 "mana": meta["mana"],
                 "sale_value": meta["sale_value"],
+                "buy_value": meta["buy_value"],
+                "weight": _inferred_weight(meta["item"], meta["category"], meta["weight"]),
                 "effects": "; ".join(meta["effects"]),
             }
         )

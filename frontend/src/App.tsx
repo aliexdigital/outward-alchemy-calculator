@@ -7,6 +7,7 @@ import { ResultsRail } from "./components/ResultsRail";
 import { SupportRail } from "./components/SupportRail";
 import { TopBanner } from "./components/TopBanner";
 import {
+  CraftResultsTable,
   DatabaseTable,
   IngredientGroupsTable,
   InventoryList,
@@ -150,7 +151,7 @@ export default function App() {
   );
 
   const refreshCraftNow = useCallback(async (stations: string[], currentSortMode: string, currentNearThreshold: number) => {
-    const craftNowData = await api.getDirect(currentSortMode, stations, 36, currentNearThreshold);
+    const craftNowData = await api.getDirect(currentSortMode, stations, undefined, currentNearThreshold);
     startTransition(() => {
       setCraftNow(craftNowData);
     });
@@ -447,36 +448,60 @@ export default function App() {
           {error ? <div className="error-banner">{error}</div> : null}
 
           {activeSection === "Craft now" ? (
-            <InventoryEditor
-              inventory={inventory}
-              categories={metadata?.categories ?? []}
-              ingredientOptions={metadata?.ingredients ?? []}
-              filteredCatalogRows={filteredCatalogRows}
-              inventoryMap={inventoryMap}
-              quickAddValue={quickAddValue}
-              quickQty={quickQty}
-              showOwnedOnly={showOwnedOnly}
-              selectedCategories={selectedCategories}
-              draftQuantities={draftQuantities}
-              onQuickAddValueChange={setQuickAddValue}
-              onQuickQtyChange={setQuickQty}
-              onQuickAdd={handleQuickAdd}
-              onToggleCategory={(category) => setSelectedCategories((current) => toggleSelection(current, category))}
-              onToggleOwnedOnly={setShowOwnedOnly}
-              onClearInventory={() => void handleInventoryMutation(api.replaceInventory([]))}
-              onDraftQuantityChange={(item, value) =>
-                setDraftQuantities((current) => ({
-                  ...current,
-                  [item]: value,
-                }))
-              }
-              onToggleInventoryItem={(item, nextEnabled, currentQty) =>
-                void handleInventoryMutation(api.setInventoryItem(item, nextEnabled ? Math.max(currentQty, 1) : 0))
-              }
-              onApplyInventoryQty={(item) => void applyInventoryQty(item)}
-              onRemoveInventoryItem={(item) => void removeInventoryItem(item)}
-              onDownloadInventoryCsv={() => downloadCsv("outward_inventory.csv", inventoryRows(inventory?.items))}
-            />
+            <>
+              <InventoryEditor
+                inventory={inventory}
+                categories={metadata?.categories ?? []}
+                ingredientOptions={metadata?.ingredients ?? []}
+                filteredCatalogRows={filteredCatalogRows}
+                inventoryMap={inventoryMap}
+                quickAddValue={quickAddValue}
+                quickQty={quickQty}
+                showOwnedOnly={showOwnedOnly}
+                selectedCategories={selectedCategories}
+                draftQuantities={draftQuantities}
+                onQuickAddValueChange={setQuickAddValue}
+                onQuickQtyChange={setQuickQty}
+                onQuickAdd={handleQuickAdd}
+                onToggleCategory={(category) => setSelectedCategories((current) => toggleSelection(current, category))}
+                onToggleOwnedOnly={setShowOwnedOnly}
+                onClearInventory={() => void handleInventoryMutation(api.replaceInventory([]))}
+                onDraftQuantityChange={(item, value) =>
+                  setDraftQuantities((current) => ({
+                    ...current,
+                    [item]: value,
+                  }))
+                }
+                onToggleInventoryItem={(item, nextEnabled, currentQty) =>
+                  void handleInventoryMutation(api.setInventoryItem(item, nextEnabled ? Math.max(currentQty, 1) : 0))
+                }
+                onApplyInventoryQty={(item) => void applyInventoryQty(item)}
+                onRemoveInventoryItem={(item) => void removeInventoryItem(item)}
+                onDownloadInventoryCsv={() => downloadCsv("outward_inventory.csv", inventoryRows(inventory?.items))}
+              />
+
+              <Panel
+                title="Full craftable list"
+                description="Every direct craft from the current inventory, sorted by the live ranking."
+                headerAside={
+                  <label className="panel-select panel-select-compact">
+                    <span>Sort</span>
+                    <select value={sortMode} onChange={(event) => setSortMode(event.target.value)}>
+                      {SORT_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                }
+              >
+                <div className="info-strip">
+                  {craftNow?.count ?? 0} craftable recipe{craftNow?.count === 1 ? "" : "s"} with the current station filters.
+                </div>
+                <CraftResultsTable rows={craftNow?.items ?? []} />
+              </Panel>
+            </>
           ) : null}
 
           {activeSection === "Plan a target" ? (
@@ -661,13 +686,8 @@ export default function App() {
         </section>
 
         <ResultsRail
-          activeSection={activeSection}
           bestDirect={bestDirect}
-          craftNow={craftNow}
           near={near}
-          sortMode={sortMode}
-          onSortModeChange={setSortMode}
-          sortOptions={SORT_MODES}
         />
       </div>
     </main>

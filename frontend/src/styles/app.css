@@ -861,6 +861,24 @@
   font-size: 0.84rem;
 }
 
+.result-card-recipe {
+  display: grid;
+  gap: 0.12rem;
+  margin-bottom: 0.45rem;
+}
+
+.result-card-recipe span {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-soft);
+}
+
+.result-card-recipe strong {
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
 .result-card-note {
   color: var(--text-muted);
   font-size: 0.86rem;
@@ -877,6 +895,16 @@
 .missing-summary {
   color: var(--accent-soft);
   font-weight: 700;
+}
+
+.results-preview {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.results-toggle {
+  width: 100%;
+  margin-top: 0.7rem;
 }
 
 .mini-table {

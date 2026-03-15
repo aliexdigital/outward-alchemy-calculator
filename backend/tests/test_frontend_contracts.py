@@ -76,12 +76,13 @@ def test_left_rail_sections_are_individually_collapsible() -> None:
 
 def test_direct_result_sections_are_clearly_distinguished() -> None:
     results_source = read_frontend("components/ResultsRail.tsx")
+    app_source = read_frontend("App.tsx")
 
     assert 'title="Best direct options"' in results_source
-    assert 'title="Full craftable list"' in results_source
     assert 'title="Almost craftable"' in results_source
-    assert results_source.index('title="Best direct options"') < results_source.index('title="Full craftable list"')
-    assert results_source.index('title="Full craftable list"') < results_source.index('title="Almost craftable"')
+    assert 'title="Full craftable list"' not in results_source
+    assert 'title="Full craftable list"' in app_source
+    assert results_source.index('title="Best direct options"') < results_source.index('title="Almost craftable"')
 
 
 def test_near_craft_views_use_missing_summary_without_slots_column() -> None:
@@ -96,10 +97,14 @@ def test_near_craft_views_use_missing_summary_without_slots_column() -> None:
 
 def test_results_rail_surfaces_real_score_and_missing_groups() -> None:
     views_source = read_frontend("components/data-views.tsx")
+    results_source = read_frontend("components/ResultsRail.tsx")
 
     assert "row.smart_score" in views_source
     assert 'title="Real smart-score ranking"' in views_source
     assert "slotLabel(row.missing_slots)" in views_source
+    assert "BEST_DIRECT_PREVIEW = 5" in results_source
+    assert "NEAR_PREVIEW = 6" in results_source
+    assert "Show less" in results_source
 
 
 def test_ingredient_lists_render_with_commas() -> None:
@@ -108,6 +113,8 @@ def test_ingredient_lists_render_with_commas() -> None:
     assert 'orderedTokens.join(", ")' in views_source
     assert "ingredientSummary(row.ingredient_list, row.ingredients)" in views_source
     assert "ingredientSummary(recipe.ingredient_list, recipe.ingredients)" in views_source
+    assert "<strong>Recipe:</strong>" in views_source
+    assert 'className="result-card-recipe"' in views_source
 
 
 def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
@@ -118,6 +125,14 @@ def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
     assert "api.getOverview(" not in app_source
     assert "api.getInventory(" not in app_source
     assert 'if (!metadata || activeSection !== "Craft now") return;' in app_source
+
+
+def test_craft_now_main_view_contains_the_full_craftable_table_and_sort_control() -> None:
+    app_source = read_frontend("App.tsx")
+
+    assert "<CraftResultsTable" in app_source
+    assert 'title="Full craftable list"' in app_source
+    assert '<span>Sort</span>' in app_source
 
 
 def test_banner_is_full_width_and_centered_in_css() -> None:

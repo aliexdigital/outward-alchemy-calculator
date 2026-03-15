@@ -49,6 +49,9 @@ export type RecipeResult = {
   stamina_each: number;
   mana_each: number;
   sale_value_each: number;
+  buy_value_each: number;
+  weight_each: number;
+  value_per_weight_each: number;
   effects: string;
   category: string;
   healing_total: number;
@@ -89,6 +92,8 @@ export type ItemStat = {
   stamina: number;
   mana: number;
   sale_value: number;
+  buy_value: number;
+  weight: number;
   effects: string;
 };
 
@@ -106,6 +111,8 @@ export type RecipeDatabaseRecord = {
   stamina: number;
   mana: number;
   sale_value: number;
+  buy_value: number;
+  weight: number;
   category: string;
 };
 

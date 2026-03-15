@@ -59,6 +59,8 @@ def _load_item_metadata() -> Dict[str, dict]:
             "stamina": float(meta.get("stamina", 0) or 0),
             "mana": float(meta.get("mana", 0) or 0),
             "sale_value": float(meta.get("sale_value", 0) or 0),
+            "buy_value": float(meta.get("buy_value", 0) or 0),
+            "weight": float(meta.get("weight", 0) or 0),
             "effects": [core.normalize(effect) for effect in effects if core.normalize(effect)],
             "category": core.normalize(meta.get("category", "")),
         }
@@ -83,7 +85,7 @@ def load_calculator_data() -> CalculatorData:
     recipes_df = core.prune_invalid_recipes(recipes_df, groups)
     item_metadata = _load_item_metadata()
     recipe_index = core.build_recipe_index(recipes_df)
-    item_catalog = core.build_item_catalog(recipes_df, groups)
+    item_catalog = core.build_item_catalog(recipes_df, groups, item_metadata)
     catalog_by_category = core.build_catalog_by_category(item_catalog, item_metadata)
     station_options = sorted(recipes_df["station"].dropna().unique().tolist())
     return CalculatorData(
@@ -382,7 +384,19 @@ class CalculatorService:
             stamina=self.data.recipes_df["result"].apply(lambda result: core.item_meta_for(result, self.data.item_metadata)["stamina"]),
             mana=self.data.recipes_df["result"].apply(lambda result: core.item_meta_for(result, self.data.item_metadata)["mana"]),
             sale_value=self.data.recipes_df["result"].apply(lambda result: core.item_meta_for(result, self.data.item_metadata)["sale_value"]),
-            category=self.data.recipes_df["result"].apply(lambda result: core.item_meta_for(result, self.data.item_metadata)["category"]),
+            buy_value=self.data.recipes_df["result"].apply(lambda result: core.item_meta_for(result, self.data.item_metadata)["buy_value"]),
+            weight=self.data.recipes_df["result"].apply(
+                lambda result: core.item_meta_for(result, self.data.item_metadata)["weight"]
+                or core._inferred_weight(
+                    result,
+                    core.item_meta_for(result, self.data.item_metadata)["category"] or core.infer_item_category(result, self.data.item_metadata),
+                    core.item_meta_for(result, self.data.item_metadata)["weight"],
+                )
+            ),
+            category=self.data.recipes_df["result"].apply(
+                lambda result: core.item_meta_for(result, self.data.item_metadata)["category"]
+                or core.infer_item_category(result, self.data.item_metadata)
+            ),
         ).drop(columns=["result_key"])
         return {
             "ingredients": list(self.data.item_catalog),

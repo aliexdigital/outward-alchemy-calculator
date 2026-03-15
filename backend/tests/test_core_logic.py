@@ -42,10 +42,12 @@ def make_service(
             "stamina": float(meta.get("stamina", 0) or 0),
             "mana": float(meta.get("mana", 0) or 0),
             "sale_value": float(meta.get("sale_value", 0) or 0),
+            "buy_value": float(meta.get("buy_value", 0) or 0),
+            "weight": float(meta.get("weight", 0) or 0),
             "effects": [core.normalize(effect) for effect in effects if core.normalize(effect)],
             "category": core.normalize(meta.get("category", "")),
         }
-    item_catalog = core.build_item_catalog(frame, groups)
+    item_catalog = core.build_item_catalog(frame, groups, normalized_metadata)
     data = CalculatorData(
         recipes_df=frame,
         groups=groups,
@@ -275,6 +277,98 @@ def test_smart_score_rewards_buffs_and_survival_utility() -> None:
     ranked = service.direct_crafts(sort_mode="Smart score", stations=["Alchemy Kit", "Campfire"])["items"]
 
     assert [row["result"] for row in ranked[:2]] == ["Weather Defense Potion", "Camp Slush"]
+
+
+def test_smart_score_penalizes_heavy_low_utility_results_when_weight_is_a_burden() -> None:
+    service = make_service(
+        [
+            {
+                "recipe_id": "tonic",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Trail Tonic",
+                "result_qty": 1,
+                "station": "Alchemy Kit",
+                "ingredients": "Leaf|Water",
+            },
+            {
+                "recipe_id": "idol",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Burden Idol",
+                "result_qty": 1,
+                "station": "Manual Crafting",
+                "ingredients": "Leaf|Dust",
+            },
+        ],
+        item_metadata={
+            "Trail Tonic": {
+                "sale_value": 8,
+                "buy_value": 24,
+                "weight": 0.5,
+                "effects": ["Restores 15 Burnt Stamina", "Cold Weather Def Up"],
+                "category": "Potion",
+            },
+            "Burden Idol": {
+                "sale_value": 8,
+                "buy_value": 24,
+                "weight": 8.0,
+                "effects": ["Heavy camp decoration"],
+                "category": "Deployable",
+            },
+        },
+    )
+    service.replace_inventory([{"item": "Leaf", "qty": 2}, {"item": "Dust", "qty": 1}, {"item": "Clean Water", "qty": 1}])
+
+    ranked = service.direct_crafts(sort_mode="Smart score", stations=["Alchemy Kit", "Manual Crafting"])["items"]
+
+    assert [row["result"] for row in ranked[:2]] == ["Trail Tonic", "Burden Idol"]
+
+
+def test_smart_score_allows_strong_deployable_utility_to_justify_weight() -> None:
+    service = make_service(
+        [
+            {
+                "recipe_id": "lodge",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Mage Tent",
+                "result_qty": 1,
+                "station": "Manual Crafting",
+                "ingredients": "Cloth|Thread",
+            },
+            {
+                "recipe_id": "snack",
+                "recipe_page": "Unit",
+                "section": "Ranking",
+                "result": "Filler Snack",
+                "result_qty": 2,
+                "station": "Campfire",
+                "ingredients": "Cloth",
+            },
+        ],
+        item_metadata={
+            "Mage Tent": {
+                "sale_value": 30,
+                "buy_value": 100,
+                "weight": 3.0,
+                "effects": ["Reduces burnt Mana from sleeping by half", "-15% Mana costs"],
+                "category": "Deployable",
+            },
+            "Filler Snack": {
+                "sale_value": 3,
+                "buy_value": 10,
+                "weight": 0.5,
+                "effects": ["Plain filler food"],
+                "category": "Food",
+            },
+        },
+    )
+    service.replace_inventory([{"item": "Cloth", "qty": 1}, {"item": "Thread", "qty": 1}])
+
+    ranked = service.direct_crafts(sort_mode="Smart score", stations=["Manual Crafting", "Campfire"])["items"]
+
+    assert [row["result"] for row in ranked[:2]] == ["Mage Tent", "Filler Snack"]
 
 
 def test_planner_success_path_crafts_intermediates() -> None:

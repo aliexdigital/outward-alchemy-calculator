@@ -27,6 +27,10 @@ def result_map(items: list[dict]) -> dict[str, dict]:
     return {row["result"]: row for row in items}
 
 
+def item_stat_map(items: list[dict]) -> dict[str, dict]:
+    return {row["item"]: row for row in items}
+
+
 def test_recipe_loading_uses_canonical_groups_and_manual_station_label() -> None:
     data = load_calculator_data()
 
@@ -214,3 +218,48 @@ def test_metadata_exposes_recipe_database_groups_and_item_stats() -> None:
     assert metadata["recipes"]
     assert metadata["ingredient_groups"]
     assert metadata["item_stats"]
+
+
+def test_inventory_can_grow_past_46_unique_entries_and_duplicates_still_aggregate() -> None:
+    client = make_client()
+
+    metadata = client.get("/api/metadata").json()
+    unique_items = metadata["ingredients"][:60]
+
+    for item_name in unique_items:
+        client.post("/api/inventory/items/add", json={"item": item_name, "qty": 1}).raise_for_status()
+
+    inventory = client.get("/api/inventory").json()
+
+    assert inventory["unique_items"] == 60
+    assert inventory["total_quantity"] == 60
+
+    client.post("/api/inventory/items/add", json={"item": unique_items[0], "qty": 2}).raise_for_status()
+    inventory_after_duplicate = client.get("/api/inventory").json()
+
+    assert inventory_after_duplicate["unique_items"] == 60
+    assert inventory_after_duplicate["total_quantity"] == 62
+    assert any(row == {"item": unique_items[0], "qty": 3} for row in inventory_after_duplicate["items"])
+
+
+def test_luxury_tent_is_searchable_has_metadata_and_counts_as_an_advanced_tent() -> None:
+    client = make_client()
+
+    metadata = client.get("/api/metadata").json()
+    searchable_items = set(metadata["ingredients"])
+    item_stats = item_stat_map(metadata["item_stats"])
+
+    assert {"Simple Tent", "Luxury Tent", "Mage Tent", "Fur Tent", "Camouflaged Tent", "Plant Tent"} <= searchable_items
+    assert "Luxury Tent" in item_stats
+    assert item_stats["Luxury Tent"]["category"] == "Deployable"
+    assert item_stats["Luxury Tent"]["weight"] == 6.0
+    assert "Faster Health recovery from Rest" in item_stats["Luxury Tent"]["effects"]
+
+    client.post("/api/inventory/items/add", json={"item": "Luxury Tent", "qty": 1}).raise_for_status()
+    client.post("/api/inventory/items/add", json={"item": "Obsidian Shard", "qty": 1}).raise_for_status()
+    client.post("/api/inventory/items/add", json={"item": "Seared Root", "qty": 1}).raise_for_status()
+    client.post("/api/inventory/items/add", json={"item": "Predator Bones", "qty": 1}).raise_for_status()
+
+    direct = client.get("/api/results/direct?stations=Manual+Crafting&limit=100").json()
+
+    assert "Fire Totemic Lodge" in result_map(direct["items"])

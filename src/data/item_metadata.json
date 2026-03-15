@@ -50,15 +50,19 @@
   },
   "Mineral Tea": {
     "category": "Tea",
-    "stamina": 15,
-    "sale_value": 8,
-    "effects": ["Comfort drink and light stamina help"]
+    "heal": 15,
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 0.5,
+    "effects": ["Restores 15 Burnt Health", "Impact Resistance Up", "Removes Indigestion"]
   },
   "Soothing Tea": {
     "category": "Tea",
-    "heal": 12,
-    "sale_value": 8,
-    "effects": ["Gentle healing support"]
+    "mana": 15,
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 0.5,
+    "effects": ["Restores 15 Burnt Mana", "Removes Common Cold"]
   },
   "Needle Tea": {
     "category": "Tea",
@@ -75,8 +79,10 @@
   "Bitter Spicy Tea": {
     "category": "Tea",
     "stamina": 18,
-    "sale_value": 8,
-    "effects": ["Warming drink with light stamina support"]
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 0.5,
+    "effects": ["Restores 15 Burnt Stamina", "Cold Weather Def Up", "Removes Infection"]
   },
   "Invigorating Potion": {
     "category": "Potion",
@@ -116,8 +122,10 @@
   },
   "Weather Defense Potion": {
     "category": "Potion",
-    "sale_value": 22,
-    "effects": ["Weather resistance support"]
+    "sale_value": 12,
+    "buy_value": 40,
+    "weight": 0.5,
+    "effects": ["+20 Hot Weather Def", "+20 Cold Weather Def", "+10 Decay resist"]
   },
   "Gaberry Tartine": {
     "category": "Food",
@@ -250,5 +258,96 @@
     "mana": 10,
     "sale_value": 16,
     "effects": ["Dessert with mixed recovery"]
+  },
+  "Simple Tent": {
+    "category": "Deployable",
+    "sale_value": 10,
+    "buy_value": 32,
+    "weight": 5.0,
+    "effects": ["-5% Stamina cost of actions"]
+  },
+  "Luxury Tent": {
+    "category": "Deployable",
+    "sale_value": 60,
+    "buy_value": 200,
+    "weight": 6.0,
+    "effects": ["Faster Health recovery from Rest", "Ambush chance increased", "-20% Stamina cost of actions"]
+  },
+  "Mage Tent": {
+    "category": "Deployable",
+    "sale_value": 30,
+    "buy_value": 100,
+    "weight": 3.0,
+    "effects": ["Reduces burnt Mana from sleeping by half", "-15% Mana costs"]
+  },
+  "Fur Tent": {
+    "category": "Deployable",
+    "sale_value": 20,
+    "buy_value": 65,
+    "weight": 6.0,
+    "effects": ["+10 Cold Weather Def", "-15% Stamina costs"]
+  },
+  "Camouflaged Tent": {
+    "category": "Deployable",
+    "sale_value": 15,
+    "buy_value": 50,
+    "weight": 4.0,
+    "effects": ["Ambush chance greatly reduced", "+5% Stealth", "-10% Stamina cost of actions"]
+  },
+  "Plant Tent": {
+    "category": "Deployable",
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 0.2,
+    "effects": ["Refills Hunger and Drink", "+10 Hot Weather Def", "Cannot be picked back up"]
+  },
+  "Calygrey Bone Cage": {
+    "category": "Deployable",
+    "sale_value": 10,
+    "buy_value": 32,
+    "weight": 5.0,
+    "effects": ["+0.25 Health per second", "+10% Physical damage bonus"]
+  },
+  "Scourge Cocoon": {
+    "category": "Deployable",
+    "sale_value": 2,
+    "buy_value": 8,
+    "weight": 2.0,
+    "effects": ["Raises Corruption while sleeping", "Reduces burnt Mana while sleeping", "-5% Stamina cost of actions"]
+  },
+  "Corruption Totemic Lodge": {
+    "category": "Deployable",
+    "sale_value": 66,
+    "buy_value": 220,
+    "weight": 5.0,
+    "effects": ["-15% Stamina costs", "+10% Decay damage bonus", "-35% Lightning resistance"]
+  },
+  "Ethereal Totemic Lodge": {
+    "category": "Deployable",
+    "sale_value": 66,
+    "buy_value": 220,
+    "weight": 5.0,
+    "effects": ["-15% Stamina costs", "+10% Ethereal damage bonus", "-35% Physical resistance"]
+  },
+  "Fire Totemic Lodge": {
+    "category": "Deployable",
+    "sale_value": 66,
+    "buy_value": 220,
+    "weight": 5.0,
+    "effects": ["-15% Stamina costs", "+10% Fire damage bonus", "-35% Frost resistance"]
+  },
+  "Ice Totemic Lodge": {
+    "category": "Deployable",
+    "sale_value": 66,
+    "buy_value": 220,
+    "weight": 5.0,
+    "effects": ["-15% Stamina costs", "+10% Frost damage bonus", "-35% Fire resistance"]
+  },
+  "Lightning Totemic Lodge": {
+    "category": "Deployable",
+    "sale_value": 66,
+    "buy_value": 220,
+    "weight": 5.0,
+    "effects": ["-15% Stamina costs", "+10% Lightning damage bonus", "-35% Decay resistance"]
   }
 }

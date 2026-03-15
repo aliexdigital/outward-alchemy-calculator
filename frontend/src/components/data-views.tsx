@@ -24,10 +24,14 @@ function ingredientSummary(tokens: string[] | undefined, fallback: string) {
   return orderedTokens.length ? orderedTokens.join(", ") : fallback;
 }
 
+function recipeSummary(row: RecipeResult) {
+  return ingredientSummary(row.ingredient_list, row.ingredients);
+}
+
 function utilityNote(row: RecipeResult) {
   if (row.effects) return row.effects;
   if (row.category) return row.category;
-  return ingredientSummary(row.ingredient_list, row.ingredients);
+  return "";
 }
 
 export function BestDirectCards({
@@ -58,7 +62,11 @@ export function BestDirectCards({
             <span>Yield {row.max_total_output}</span>
             <span>{row.max_crafts} craftable</span>
           </div>
-          <p className="result-card-note">{utilityNote(row)}</p>
+          <div className="result-card-recipe">
+            <span>Recipe</span>
+            <strong>{recipeSummary(row)}</strong>
+          </div>
+          {utilityNote(row) ? <p className="result-card-note">{utilityNote(row)}</p> : null}
         </article>
       ))}
     </div>
@@ -93,7 +101,10 @@ export function CraftResultsTable({
             <tr key={`${row.result}-${row.station}-${row.ingredients}`}>
               <td>
                 <div className="table-result-name">{row.result}</div>
-                <div className="table-note">{utilityNote(row)}</div>
+                <div className="table-note">
+                  <strong>Recipe:</strong> {recipeSummary(row)}
+                </div>
+                {utilityNote(row) ? <div className="table-note">{utilityNote(row)}</div> : null}
               </td>
               <td>{formatScore(row.smart_score)}</td>
               <td>{row.max_crafts}</td>
@@ -287,7 +298,9 @@ export function ItemStatsTable({
             <th>Heal</th>
             <th>Stamina</th>
             <th>Mana</th>
+            <th>Weight</th>
             <th>Sale</th>
+            <th>Buy</th>
             <th>Effects</th>
           </tr>
         </thead>
@@ -299,7 +312,9 @@ export function ItemStatsTable({
               <td>{row.heal}</td>
               <td>{row.stamina}</td>
               <td>{row.mana}</td>
+              <td>{row.weight}</td>
               <td>{row.sale_value}</td>
+              <td>{row.buy_value}</td>
               <td>{row.effects}</td>
             </tr>
           ))}
