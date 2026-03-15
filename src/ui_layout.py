@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from html import escape
 from pathlib import Path
+from textwrap import dedent
 from typing import Dict, Iterator, List, Optional, Tuple
 
 import streamlit as st
@@ -15,15 +16,19 @@ def load_ui_styles() -> None:
     st.markdown(f"<style>{STYLE_PATH.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
 
 
+def _render_html(markup: str) -> None:
+    html = dedent(markup).strip()
+    st.html(html)
+
+
 def _hook_name(name: str) -> str:
     return name.strip().replace("_", "-")
 
 
 def render_hook(name: str) -> None:
     hook = _hook_name(name)
-    st.markdown(
+    _render_html(
         f'<div class="ui-hook {hook}-hook" data-ui-hook="{hook}" aria-hidden="true"></div>',
-        unsafe_allow_html=True,
     )
 
 
@@ -49,14 +54,13 @@ def named_expander(name: str, label: str, *, expanded: bool = False) -> Iterator
 
 
 def render_hero(title: str, subtitle: str) -> None:
-    st.markdown(
+    _render_html(
         f"""
         <section class="hero-card" id="hero-card">
             <h1 class="hero-title">{escape(title)}</h1>
             <p class="hero-subtitle">{escape(subtitle)}</p>
         </section>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -64,15 +68,14 @@ def render_section_header(name: str, title: str, description: str = "", eyebrow:
     hook = _hook_name(name)
     eyebrow_html = f'<div class="section-eyebrow">{escape(eyebrow)}</div>' if eyebrow else ""
     description_html = f'<p class="section-description">{escape(description)}</p>' if description else ""
-    st.markdown(
+    _render_html(
         f"""
         <div class="section-header {hook}__header">
             {eyebrow_html}
             <h2 class="section-title">{escape(title)}</h2>
             {description_html}
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -98,30 +101,28 @@ def render_section_nav() -> str:
 
 def render_active_section_note(active_section: str) -> None:
     note = section_descriptions()[active_section]
-    st.markdown(f'<div class="mode-note">{escape(note)}</div>', unsafe_allow_html=True)
+    _render_html(f'<div class="mode-note">{escape(note)}</div>')
 
 
 def render_tab_help(title: str, description: str) -> None:
-    st.markdown(
+    _render_html(
         f"""
         <div class="helper-card">
             <strong>{escape(title)}</strong><br>
             {escape(description)}
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
 def render_table_header(title: str, help_text: str) -> None:
-    st.markdown(
+    _render_html(
         f"""
         <div class="table-header">
             <span class="table-header-title">{escape(title)}</span>
             <span class="table-header-help" title="{escape(help_text)}">?</span>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
 
@@ -133,7 +134,6 @@ def render_compact_stats(stats: List[Tuple[str, object]], columns: int = 4, vari
 
 def render_empty_state(message: str, tone: str = "soft") -> None:
     tone_class = tone if tone in {"soft", "inline"} else "soft"
-    st.markdown(
+    _render_html(
         f'<div class="empty-state {tone_class}">{escape(message)}</div>',
-        unsafe_allow_html=True,
     )
