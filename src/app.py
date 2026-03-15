@@ -855,79 +855,78 @@ def render_utility_sidebar(
 ) -> Tuple[List[str], int, Counter, st.delta_generator.DeltaGenerator]:
     glossary = column_glossary()
     extra_inventory = Counter()
-    with st.sidebar:
-        render_hook("utility-rail")
-        render_section_header(
-            "utility-rail",
-            "Utility rail",
-            "Planning tools, helper notes, and bulk inventory actions live here.",
-            eyebrow="Utility rail",
+    render_hook("utility-rail")
+    render_section_header(
+        "utility-rail",
+        "Utility rail",
+        "Planning tools, helper notes, and bulk inventory actions live here.",
+        eyebrow="Utility rail",
+    )
+    snapshot_placeholder = st.empty()
+
+    with named_expander("planning-tools-panel", "Planning tools", expanded=True):
+        st.caption("Choose stations and planner depth for the current planning pass.")
+        with named_block("stations-filter"):
+            station_filter = st.multiselect(
+                "Stations",
+                options=sorted(recipes_df["station"].dropna().unique().tolist()),
+                default=sorted(recipes_df["station"].dropna().unique().tolist()),
+                help="Limit recipe results to the crafting stations you want to use.",
+            )
+        with named_block("planner-depth-control"):
+            max_depth = st.slider(
+                "Planner depth",
+                min_value=1,
+                max_value=8,
+                value=5,
+                help="Higher depth allows more intermediate crafting steps, but may take longer to search.",
+            )
+
+    with named_expander("sidebar-guide-panel", "How to use this sidebar", expanded=False):
+        st.markdown(
+            """
+            - **Planning tools** controls stations and planner depth.
+            - **Bulk add inventory** supports CSV, Excel, and pasted item lists.
+            - **Snapshot** gives the quick inventory/crafting summary.
+            - Use the top navigation for full views like **Craft now**, **Plan a target**, **Shopping list**, and **Missing ingredients**.
+            """
         )
-        snapshot_placeholder = st.empty()
 
-        with named_expander("planning-tools-panel", "Planning tools", expanded=True):
-            st.caption("Choose stations and planner depth for the current planning pass.")
-            with named_block("stations-filter"):
-                station_filter = st.multiselect(
-                    "Stations",
-                    options=sorted(recipes_df["station"].dropna().unique().tolist()),
-                    default=sorted(recipes_df["station"].dropna().unique().tolist()),
-                    help="Limit recipe results to the crafting stations you want to use.",
-                )
-            with named_block("planner-depth-control"):
-                max_depth = st.slider(
-                    "Planner depth",
-                    min_value=1,
-                    max_value=8,
-                    value=5,
-                    help="Higher depth allows more intermediate crafting steps, but may take longer to search.",
-                )
+    with named_expander("bulk-add-panel", "Bulk add inventory", expanded=False):
+        st.caption("Use this if paste/upload is faster than ticking individual ingredients.")
+        uploaded = st.file_uploader(
+            "Upload CSV or Excel",
+            type=["csv", "xlsx"],
+            help="Use an inventory sheet with an item/name column and an optional qty column.",
+        )
+        raw_text = st.text_area(
+            "Paste item,qty lines",
+            value="",
+            height=120,
+            placeholder="Wheat,8\nClean Water,4\nSalt,3",
+            help="Formats like `item,qty`, `item<TAB>qty`, or just `item` all work.",
+        )
 
-        with named_expander("sidebar-guide-panel", "How to use this sidebar", expanded=False):
-            st.markdown(
-                """
-                - **Planning tools** controls stations and planner depth.
-                - **Bulk add inventory** supports CSV, Excel, and pasted item lists.
-                - **Snapshot** gives the quick inventory/crafting summary.
-                - Use the top navigation for full views like **Craft now**, **Plan a target**, **Shopping list**, and **Missing ingredients**.
-                """
-            )
+        if uploaded is not None:
+            if uploaded.name.lower().endswith(".csv"):
+                uploaded_df = pd.read_csv(uploaded)
+            else:
+                uploaded_df = pd.read_excel(uploaded)
+            extra_inventory.update(inventory_from_df(uploaded_df))
 
-        with named_expander("bulk-add-panel", "Bulk add inventory", expanded=False):
-            st.caption("Use this if paste/upload is faster than ticking individual ingredients.")
-            uploaded = st.file_uploader(
-                "Upload CSV or Excel",
-                type=["csv", "xlsx"],
-                help="Use an inventory sheet with an item/name column and an optional qty column.",
-            )
-            raw_text = st.text_area(
-                "Paste item,qty lines",
-                value="",
-                height=120,
-                placeholder="Wheat,8\nClean Water,4\nSalt,3",
-                help="Formats like `item,qty`, `item<TAB>qty`, or just `item` all work.",
-            )
+        if raw_text.strip():
+            extra_inventory.update(counts_from_text(raw_text))
 
-            if uploaded is not None:
-                if uploaded.name.lower().endswith(".csv"):
-                    uploaded_df = pd.read_csv(uploaded)
-                else:
-                    uploaded_df = pd.read_excel(uploaded)
-                extra_inventory.update(inventory_from_df(uploaded_df))
+    with named_expander("data-details-panel", "Data details", expanded=False):
+        st.caption(f"Recipes loaded: {len(recipes_df)}")
+        st.caption(f"Ingredient groups cleaned: {len(groups)}")
+        st.caption(f"Items with effect/value notes: {len(item_metadata)}")
+        st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
+        st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
 
-            if raw_text.strip():
-                extra_inventory.update(counts_from_text(raw_text))
-
-        with named_expander("data-details-panel", "Data details", expanded=False):
-            st.caption(f"Recipes loaded: {len(recipes_df)}")
-            st.caption(f"Ingredient groups cleaned: {len(groups)}")
-            st.caption(f"Items with effect/value notes: {len(item_metadata)}")
-            st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
-            st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
-
-        with named_expander("column-help-panel", "Column help", expanded=False):
-            for column, description in glossary:
-                st.markdown(f"- **{column}**: {description}")
+    with named_expander("column-help-panel", "Column help", expanded=False):
+        for column, description in glossary:
+            st.markdown(f"- **{column}**: {description}")
 
     return station_filter, max_depth, extra_inventory, snapshot_placeholder
 
@@ -1000,22 +999,19 @@ catalog_by_category = build_catalog_by_category(item_catalog, item_metadata)
 render_hook("app-shell")
 render_hero("Alie's Outward Crafting", "Compare recipes, rank recovery or value, and build a clean shopping list.")
 using_live = (DATA_DIR / "recipes.csv").exists()
-station_filter, max_depth, extra_inventory, snapshot_placeholder = render_utility_sidebar(
-    recipes_df, groups, item_metadata, using_live
-)
 
-nav_col, _ = st.columns([0.78, 0.22], gap="small")
-with nav_col:
-    with named_block("top-mode-nav"):
-        active_section = render_section_nav()
-        render_active_section_note(active_section)
+with named_block("top-mode-nav"):
+    active_section = render_section_nav()
+    render_active_section_note(active_section)
 st.markdown('<div class="thin-divider"></div>', unsafe_allow_html=True)
 
 with named_block("content-shell"):
-    # Manual edit point: main workflow width vs right results sidebar width.
-    inventory_col, overview_col = st.columns([1.7, 1.0], gap="medium")
-    with inventory_col:
-        render_hook("main-column")
+    with named_block("utility-rail-region"):
+        station_filter, max_depth, extra_inventory, snapshot_placeholder = render_utility_sidebar(
+            recipes_df, groups, item_metadata, using_live
+        )
+
+    with named_block("main-column"):
         render_hook("inventory-section")
         render_section_header("inventory-section", "Inventory input", "Search, filter, and edit the ingredients you own here.")
         inventory_overview_placeholder = st.empty()
@@ -1070,8 +1066,7 @@ with named_block("content-shell"):
     top_mana = craftable.sort_values(["mana_total", "result"], ascending=[False, True]).head(1)
     render_utility_sidebar_extras(snapshot_placeholder, inventory_df, filtered, craftable, near, top_heal, top_stamina, top_mana)
 
-    with overview_col:
-        render_hook("right-sidebar")
+    with named_block("right-sidebar"):
         with named_panel("best-direct-card", border=True):
             render_section_header(
                 "best-direct-card",

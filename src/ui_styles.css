@@ -163,53 +163,63 @@ div[data-testid="stVerticalBlock"]:has(.top-mode-nav-hook) div[role="radiogroup"
 
 /* Layout Shell */
 div[data-testid="stVerticalBlock"]:has(.content-shell-hook) {
-    gap: 0.03rem;
+    display: grid !important;
+    grid-template-columns: 15.5rem minmax(0, 1fr) minmax(22rem, 25rem);
+    column-gap: 1rem;
+    align-items: start;
+    row-gap: 0;
 }
 
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stHorizontalBlock"] {
-    align-items: flex-start;
-    gap: 1rem;
-}
-
-div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"] {
     min-width: 0;
 }
 
-div[data-testid="column"]:has(.main-column-hook) > div[data-testid="stVerticalBlock"] {
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) {
+    grid-column: 1;
+}
+
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.main-column-hook) {
+    grid-column: 2;
+}
+
+div[data-testid="stVerticalBlock"]:has(.content-shell-hook) > div[data-testid="stVerticalBlock"]:has(.right-sidebar-hook) {
+    grid-column: 3;
+}
+
+div[data-testid="stVerticalBlock"]:has(.main-column-hook) {
     gap: 0.08rem;
 }
 
-div[data-testid="column"]:has(.right-sidebar-hook) > div[data-testid="stVerticalBlock"] {
+div[data-testid="stVerticalBlock"]:has(.right-sidebar-hook) {
     gap: 0.1rem;
 }
 
-section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, rgba(18, 10, 22, 0.96), rgba(24, 14, 29, 0.96));
-    border-right: 1px solid rgba(157, 74, 255, 0.18);
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) {
+    gap: 0.02rem;
+    padding-right: 0.08rem;
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.utility-rail-hook) {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) > div[data-testid="stVerticalBlock"]:has(.utility-rail-hook) {
     gap: 0.02rem;
 }
 
-section[data-testid="stSidebar"] details {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details {
     margin: 0 !important;
 }
 
-section[data-testid="stSidebar"] details > div {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details > div {
     padding-top: 0 !important;
 }
 
-section[data-testid="stSidebar"] details summary {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details summary {
     padding-top: 0.06rem !important;
     padding-bottom: 0.06rem !important;
 }
 
-@media (min-width: 1180px) {
-    section[data-testid="stSidebar"] {
-        width: 16.5rem !important;
-        min-width: 16.5rem !important;
-        max-width: 16.5rem !important;
+@media (max-width: 1200px) {
+    div[data-testid="stVerticalBlock"]:has(.content-shell-hook) {
+        grid-template-columns: minmax(0, 1fr);
+        row-gap: 0.5rem;
     }
 }
 
@@ -218,7 +228,7 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hoo
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.craft-now-card-hook),
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
     border: 1px solid rgba(157, 74, 255, 0.22) !important;
     border-radius: 12px !important;
     padding: 0.32rem 0.38rem !important;
@@ -236,11 +246,11 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hoo
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.craft-now-card-hook),
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
     background: linear-gradient(180deg, rgba(20, 18, 27, 0.92), rgba(17, 16, 23, 0.95));
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) {
     padding: 0.14rem 0.2rem !important;
     border-radius: 10px !important;
 }
@@ -249,15 +259,15 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hoo
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) > div,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) > div,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.craft-now-card-hook) > div,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) > div {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) > div {
     background: transparent !important;
 }
 
-section[data-testid="stSidebar"] details:has(.planning-tools-panel-hook),
-section[data-testid="stSidebar"] details:has(.bulk-add-panel-hook),
-section[data-testid="stSidebar"] details:has(.data-details-panel-hook),
-section[data-testid="stSidebar"] details:has(.column-help-panel-hook),
-section[data-testid="stSidebar"] details:has(.sidebar-guide-panel-hook),
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details:has(.planning-tools-panel-hook),
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details:has(.bulk-add-panel-hook),
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details:has(.data-details-panel-hook),
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details:has(.column-help-panel-hook),
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details:has(.sidebar-guide-panel-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.craft-now-card-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.plan-target-panel-hook),
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.shopping-list-panel-hook),
@@ -268,21 +278,21 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.recipe-database-panel-hook)
     background: rgba(255, 255, 255, 0.025);
 }
 
-section[data-testid="stSidebar"] details summary {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) details summary {
     font-size: 0.84rem;
 }
 
-section[data-testid="stSidebar"] .section-header {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) .section-header {
     gap: 0.06rem;
     margin-bottom: 0.04rem;
 }
 
-section[data-testid="stSidebar"] .section-title {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) .section-title {
     font-size: 0.92rem;
     line-height: 1;
 }
 
-section[data-testid="stSidebar"] .section-description {
+div[data-testid="stVerticalBlock"]:has(.utility-rail-region-hook) .section-description {
     font-size: 0.68rem;
     line-height: 1.14;
 }
@@ -380,7 +390,7 @@ div[data-testid="stVerticalBlock"]:has(.inventory-stats-block-hook) {
 }
 
 div[data-testid="stVerticalBlock"]:has(.categories-toolbar-hook) [data-baseweb="tag"],
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] {
+div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] {
     transform: none !important;
     min-height: 1.18rem !important;
     border-radius: 0.78rem !important;
@@ -388,8 +398,8 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.station
 
 div[data-testid="stVerticalBlock"]:has(.categories-toolbar-hook) [data-baseweb="tag"] > span,
 div[data-testid="stVerticalBlock"]:has(.categories-toolbar-hook) [data-baseweb="tag"] > span > span,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span > span {
+div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span,
+div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span > span {
     font-size: 0.88rem !important;
     line-height: 1.1 !important;
     font-weight: 600 !important;
@@ -398,7 +408,7 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.station
 }
 
 div[data-testid="stVerticalBlock"]:has(.categories-toolbar-hook) [data-baseweb="tag"] > span,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span {
+div[data-testid="stVerticalBlock"]:has(.stations-filter-hook) [data-baseweb="tag"] > span {
     min-height: 1.18rem !important;
     padding-top: 0.02rem !important;
     padding-bottom: 0.02rem !important;
@@ -421,8 +431,8 @@ div[data-testid="stVerticalBlock"]:has(.inventory-overview-top-row-hook) > div[d
     gap: 0.02rem;
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.snapshot-primary-stats-hook),
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:has(.snapshot-best-stats-hook) {
+div[data-testid="stVerticalBlock"]:has(.snapshot-primary-stats-hook),
+div[data-testid="stVerticalBlock"]:has(.snapshot-best-stats-hook) {
     gap: 0.01rem;
 }
 
@@ -438,7 +448,7 @@ div[data-testid="stVerticalBlock"]:has(.inventory-overview-body-hook) {
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hook) [data-testid="stMetric"],
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) [data-testid="stMetric"],
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) [data-testid="stMetric"],
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] {
     background: linear-gradient(180deg, rgba(50, 24, 62, 0.94), rgba(31, 18, 40, 0.96));
     border: 1px solid rgba(255, 105, 200, 0.24);
     border-radius: 11px;
@@ -455,15 +465,15 @@ div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) [dat
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) [data-testid="stMetric"] div,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) [data-testid="stMetric"] label,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) [data-testid="stMetric"] div,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] label,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] div {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] label,
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] div {
     text-align: center;
 }
 
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hook) [data-testid="stMetricLabel"] p,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) [data-testid="stMetricLabel"] p,
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) [data-testid="stMetricLabel"] p,
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricLabel"] p {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricLabel"] p {
     color: rgba(248, 238, 253, 0.72) !important;
     font-size: 0.68rem !important;
     line-height: 1.02 !important;
@@ -472,24 +482,24 @@ section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.inventory-overview-card-hook) [data-testid="stMetricValue"],
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.best-direct-card-hook) [data-testid="stMetricValue"],
 div[data-testid="stVerticalBlockBorderWrapper"]:has(.almost-craftable-card-hook) [data-testid="stMetricValue"],
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricValue"] {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricValue"] {
     color: var(--text) !important;
     line-height: 1 !important;
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetric"] {
     min-height: 1.85rem;
     padding: 0.08rem 0.14rem;
     border-radius: 9px;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.1);
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricLabel"] p {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricLabel"] p {
     font-size: 0.5rem !important;
     line-height: 1 !important;
 }
 
-section[data-testid="stSidebar"] div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricValue"] {
+div[data-testid="stVerticalBlockBorderWrapper"]:has(.snapshot-card-hook) [data-testid="stMetricValue"] {
     font-size: 0.76rem !important;
 }
 
