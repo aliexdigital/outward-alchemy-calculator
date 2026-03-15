@@ -616,22 +616,10 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
         "Search items",
         key="inventory_search_text",
         placeholder="Start typing an ingredient name...",
-        help="Search any ingredient name. Suggestions appear below while you type.",
+        help="Search any ingredient name. Matching items appear directly below and in the ingredient list.",
     )
     search_key = key(search)
     suggestions = [item_name for item_name in catalog if search_key and search_key in key(item_name)][:8]
-    if suggestions:
-        st.markdown('<div class="suggestion-note">Suggestions</div>', unsafe_allow_html=True)
-        suggestion_cols = st.columns(min(4, len(suggestions)))
-        for idx, item_name in enumerate(suggestions):
-            if suggestion_cols[idx % len(suggestion_cols)].button(
-                item_name,
-                key=f"search_suggestion_{idx}_{item_name}",
-                use_container_width=True,
-                type="secondary",
-            ):
-                st.session_state["inventory_search_text"] = item_name
-                st.rerun()
 
     selected_categories = st.multiselect(
         "Categories",
@@ -654,6 +642,22 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
         st.session_state["picker_inventory"] = {}
         picker_inventory = {}
         st.rerun()
+
+    if suggestions:
+        st.markdown('<div class="inline-matches">', unsafe_allow_html=True)
+        match_cols = st.columns(min(4, len(suggestions)))
+        for idx, item_name in enumerate(suggestions):
+            label = f"+ {item_name}" if picker_inventory.get(item_name, 0) <= 0 else f"{item_name} ({picker_inventory[item_name]})"
+            if match_cols[idx % len(match_cols)].button(
+                label,
+                key=f"inline_match_{idx}_{item_name}",
+                use_container_width=True,
+                type="secondary",
+            ):
+                picker_inventory[item_name] = max(1, int(picker_inventory.get(item_name, 0)) + (0 if picker_inventory.get(item_name, 0) > 0 else 1))
+                st.session_state["picker_inventory"] = picker_inventory
+                st.rerun()
+        st.markdown("</div>", unsafe_allow_html=True)
 
     active_categories = set(selected_categories or list(catalog_by_category.keys()))
     rows = []
@@ -684,12 +688,12 @@ def render_inventory_picker(catalog: List[str], catalog_by_category: Dict[str, L
     if not rows:
         st.info("No items match this search.")
     else:
-        render_table_header("Ingredient list", "Search, tick, and quantity-edit items here to build your inventory.")
+        render_table_header("Ingredient list", "This is the live filtered ingredient list. Tick or quantity-edit the rows directly here.")
         edited_rows = st.data_editor(
             pd.DataFrame(rows),
             use_container_width=True,
             hide_index=True,
-            height=460,
+            height=520,
             column_config={
                 "Have it": st.column_config.CheckboxColumn(
                     "Have it",
@@ -771,6 +775,22 @@ def explain_columns(title: str, keys: List[str]) -> None:
     lines = [f"- **{column}**: {glossary[column]}" for column in keys if column in glossary]
     with st.expander(title):
         st.markdown("\n".join(lines))
+
+
+def render_column_help_sidebar() -> None:
+    glossary = column_glossary()
+    with st.sidebar:
+        with st.expander("Data details", expanded=False):
+            st.markdown('<div class="ghost-card">', unsafe_allow_html=True)
+            st.caption(f"Recipes loaded: {len(recipes_df)}")
+            st.caption(f"Ingredient groups cleaned: {len(groups)}")
+            st.caption(f"Items with effect/value notes: {len(item_metadata)}")
+            st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
+            st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
+            st.markdown("</div>", unsafe_allow_html=True)
+        with st.expander("Column help", expanded=False):
+            for column, description in glossary:
+                st.markdown(f"- **{column}**: {description}")
 
 
 def present_recipe_table(df: pd.DataFrame, columns: List[str]) -> pd.DataFrame:
@@ -890,10 +910,10 @@ def inject_styles() -> None:
         }
         .soft-card {
             background: linear-gradient(180deg, rgba(34, 18, 40, 0.92), rgba(24, 14, 29, 0.92));
-            border: 1px solid var(--border);
-            border-radius: 18px;
+            border: 1px solid rgba(157, 74, 255, 0.34);
+            border-radius: 10px;
             padding: 0.95rem 1rem;
-            margin-bottom: 0.85rem;
+            margin-bottom: 0.45rem;
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
         }
         .section-note {
@@ -902,9 +922,9 @@ def inject_styles() -> None:
         }
         .ghost-card {
             background: rgba(255, 255, 255, 0.03);
-            border: 1px dashed rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(157, 74, 255, 0.22);
             color: rgba(248, 238, 253, 0.55);
-            border-radius: 14px;
+            border-radius: 8px;
             padding: 0.45rem 0.7rem;
             opacity: 0.72;
         }
@@ -929,11 +949,11 @@ def inject_styles() -> None:
         button[kind="secondary"], .stDownloadButton button[kind="secondary"], .stButton button[kind="secondary"] {
             background: rgba(255, 255, 255, 0.05) !important;
             color: rgba(248, 238, 253, 0.82) !important;
-            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border: 1px solid rgba(157, 74, 255, 0.18) !important;
             border-radius: 999px !important;
             font-weight: 600 !important;
-            min-height: 2.2rem !important;
-            padding: 0.2rem 0.75rem !important;
+            min-height: 1.95rem !important;
+            padding: 0.12rem 0.62rem !important;
             box-shadow: none !important;
         }
         .stSelectbox div[data-baseweb="select"] > div,
@@ -952,14 +972,14 @@ def inject_styles() -> None:
         }
         [data-testid="stMetric"] {
             background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 0.8rem;
+            border: 1px solid rgba(157, 74, 255, 0.18);
+            border-radius: 10px;
+            padding: 0.45rem 0.55rem;
         }
         [data-testid="stDataFrame"] {
-            border-radius: 16px;
+            border-radius: 10px;
             overflow: hidden;
-            border: 1px solid var(--border);
+            border: 1px solid rgba(157, 74, 255, 0.18);
         }
         .table-header {
             display: flex;
@@ -995,13 +1015,13 @@ def inject_styles() -> None:
             color: var(--pink-soft);
         }
         div[role="radiogroup"] {
-            gap: 0.5rem;
+            gap: 0.25rem;
         }
         div[role="radiogroup"] > label {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 999px;
-            padding: 0.25rem 0.65rem;
+            background: transparent;
+            border: none;
+            border-radius: 0;
+            padding: 0.05rem 0.18rem;
         }
         .stCheckbox {
             display: flex;
@@ -1019,6 +1039,20 @@ def inject_styles() -> None:
             color: rgba(248, 238, 253, 0.62);
             font-size: 0.82rem;
             margin: 0.25rem 0 0.45rem 0;
+        }
+        .inline-matches {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.28rem;
+            margin: 0.2rem 0 0.45rem 0;
+        }
+        [data-baseweb="tag"] {
+            transform: scale(0.9);
+            transform-origin: left center;
+        }
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, rgba(18, 10, 22, 0.96), rgba(24, 14, 29, 0.96));
+            border-right: 1px solid rgba(157, 74, 255, 0.18);
         }
         .section-stack {
             display: block;
@@ -1102,14 +1136,7 @@ active_section = render_section_nav()
 render_active_section_note(active_section)
 
 using_live = (DATA_DIR / "recipes.csv").exists()
-with st.expander("Data details", expanded=False):
-    st.markdown('<div class="ghost-card">', unsafe_allow_html=True)
-    st.caption(f"Recipes loaded: {len(recipes_df)}")
-    st.caption(f"Ingredient groups cleaned: {len(groups)}")
-    st.caption(f"Items with effect/value notes: {len(item_metadata)}")
-    st.caption("Live wiki pull detected." if using_live else "Using bundled sample data until you run the sync script.")
-    st.caption("Item effects and sale values come from `data/item_metadata.json`, so you can keep tuning them.")
-    st.markdown("</div>", unsafe_allow_html=True)
+render_column_help_sidebar()
 
 inventory_col, overview_col = st.columns([1.18, 0.82], gap="large")
 with inventory_col:
@@ -1220,18 +1247,18 @@ with overview_col:
         hide_index=True,
         height=340,
     )
-    explain_columns("What these quick-result columns mean", preview_cols)
     st.markdown("</div>", unsafe_allow_html=True)
 
-st.markdown('<div class="soft-card">', unsafe_allow_html=True)
-st.subheader("Snapshot")
-st.caption("A compact overview of inventory scale, recipe coverage, and what is nearly available.")
-metric_cols = st.columns(4)
-metric_cols[0].metric("Inventory lines", len(inventory_df))
-metric_cols[1].metric("Direct crafts", len(craftable))
-metric_cols[2].metric("Near crafts (<=2)", len(near))
-metric_cols[3].metric("Known recipes", len(filtered))
-st.markdown("</div>", unsafe_allow_html=True)
+with inventory_col:
+    st.markdown('<div class="soft-card">', unsafe_allow_html=True)
+    st.subheader("Snapshot")
+    st.caption("A compact overview of inventory scale, recipe coverage, and what is nearly available.")
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Inventory lines", len(inventory_df))
+    metric_cols[1].metric("Direct crafts", len(craftable))
+    metric_cols[2].metric("Near crafts (<=2)", len(near))
+    metric_cols[3].metric("Known recipes", len(filtered))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 with st.expander("Craft now", expanded=active_section == "Craft now"):
     render_tab_help(
@@ -1267,7 +1294,6 @@ with st.expander("Craft now", expanded=active_section == "Craft now"):
         ]
         render_table_header("Craftable recipes", "Recipes you can make immediately with the current inventory and station filters.")
         st.dataframe(present_recipe_table(ordered, craft_now_cols), use_container_width=True, hide_index=True, height=420)
-        explain_columns("Column guide for Craft now", craft_now_cols)
         csv_bytes = ordered.drop(columns=["ingredient_list"]).to_csv(index=False).encode("utf-8")
         st.download_button(
             "Download craftable recipes as CSV",
@@ -1365,7 +1391,6 @@ with st.expander("Missing ingredients", expanded=active_section == "Missing ingr
             hide_index=True,
             height=380,
         )
-        explain_columns("Column guide for Missing ingredients", near_cols)
 
 with st.expander("Recipe database", expanded=active_section == "Recipe database"):
     render_tab_help(
@@ -1382,10 +1407,6 @@ with st.expander("Recipe database", expanded=active_section == "Recipe database"
     show_recipes = show_recipes.drop(columns=["ingredient_list", "result_key"])
     render_table_header("Recipe database", "The full recipe dataset currently loaded into the app.")
     st.dataframe(show_recipes, use_container_width=True, hide_index=True, height=420)
-    explain_columns(
-        "Column guide for the recipe database",
-        ["result", "result_qty_per_craft", "heal_each", "stamina_each", "mana_each", "sale_value_each", "effects", "station", "ingredients"],
-    )
 
     if groups:
         render_table_header("Ingredient groups", "Grouped ingredient tokens such as Water, Vegetable, or Meat and the items that can fill them.")
