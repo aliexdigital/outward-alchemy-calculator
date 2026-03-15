@@ -1240,8 +1240,13 @@ def inject_styles() -> None:
             transform: scale(0.6);
             transform-origin: left center;
         }
+        .stMultiSelect [data-baseweb="tag"] {
+            font-size: 1rem !important;
+            line-height: 1.2 !important;
+        }
         .stMultiSelect [data-baseweb="tag"] span {
-            font-size: 0.92rem !important;
+            font-size: 1rem !important;
+            line-height: 1.2 !important;
         }
         [data-baseweb="tag"] > span {
             padding-top: 0.04rem !important;
