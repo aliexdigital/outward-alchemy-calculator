@@ -1241,7 +1241,7 @@ def inject_styles() -> None:
             transform-origin: left center;
         }
         [data-baseweb="tag"] span {
-            font-size: 0.72rem !important;
+            font-size: 0.8rem !important;
         }
         [data-baseweb="tag"] > span {
             padding-top: 0.04rem !important;
