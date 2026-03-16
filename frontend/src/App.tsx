@@ -9,6 +9,7 @@ import {
 } from "./lib/app-config";
 import {
   buildCatalogRows,
+  buildInventoryCategoryGroups,
   buildInventoryMap,
   buildItemStatsMap,
   buildRecipeCategoryOptions,
@@ -347,9 +348,23 @@ export default function App() {
     return buildCatalogRows(metadata?.categories, inventoryMap, itemStatsMap);
   }, [itemStatsMap, inventoryMap, metadata]);
 
+  const inventoryCategories = useMemo(() => {
+    return buildInventoryCategoryGroups(metadata?.categories, allCatalogRows);
+  }, [allCatalogRows, metadata]);
+
   const filteredCatalogRows = useMemo(() => {
     return filterCatalogRows(allCatalogRows, deferredQuickAddValue, selectedCategories, showOwnedOnly);
   }, [allCatalogRows, deferredQuickAddValue, selectedCategories, showOwnedOnly]);
+
+  useEffect(() => {
+    if (!inventoryCategories.length) return;
+    setSelectedCategories((current) => {
+      const missingCategories = inventoryCategories
+        .map((category) => category.name)
+        .filter((category) => !current.includes(category));
+      return missingCategories.length ? [...current, ...missingCategories] : current;
+    });
+  }, [inventoryCategories]);
 
   const recipeTargets = useMemo(() => {
     return buildRecipeTargets(metadata?.recipes);
@@ -744,7 +759,7 @@ export default function App() {
             <>
               <InventoryEditor
                 inventory={inventory}
-                categories={metadata?.categories ?? []}
+                categories={inventoryCategories}
                 ingredientOptions={metadata?.ingredients ?? []}
                 filteredCatalogRows={filteredCatalogRows}
                 inventoryMap={inventoryMap}
