@@ -16,6 +16,7 @@ from src import inventory_ops
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "src" / "data"
+OUTWARD_SYNC_INVENTORY_PATH = Path(r"C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv")
 
 
 def _load_recipes() -> pd.DataFrame:
@@ -214,6 +215,17 @@ class CalculatorService:
         imported = inventory_ops.inventory_from_df(pd.read_csv(BytesIO(file_bytes)))
         self.inventory_store.replace(imported)
         return self.get_inventory_response()
+
+    def import_csv_inventory_file(self, path: Path) -> dict:
+        return self.import_csv_inventory(path.read_bytes())
+
+    def import_latest_outward_inventory(self) -> dict:
+        if not OUTWARD_SYNC_INVENTORY_PATH.is_file():
+            raise FileNotFoundError(
+                "Latest Outward inventory file not found at "
+                f"{OUTWARD_SYNC_INVENTORY_PATH}. Export your inventory from the mod and try again."
+            )
+        return self.import_csv_inventory_file(OUTWARD_SYNC_INVENTORY_PATH)
 
     def import_excel_inventory(self, file_bytes: bytes) -> dict:
         imported = inventory_ops.inventory_from_df(pd.read_excel(BytesIO(file_bytes)))
@@ -429,11 +441,20 @@ class CalculatorService:
         found = not missing_counts
         remaining_inventory = working_inventory if found else base_inventory
         if found:
-            explanation = "A plan was found using the current inventory, planner depth, and station filters."
+            explanation = (
+                "Complete route found. The steps below can craft this target with the current inventory, "
+                "planner depth, and station filters."
+            )
         elif target_key in self.data.recipe_index and target_key not in recipe_index:
-            explanation = "No recipe for this target is available within the current station filters."
+            explanation = (
+                "No recipe for this target is available with the current station filters. "
+                "Enable the needed station to build a route."
+            )
         else:
-            explanation = "No complete plan was found. The planner is showing the closest branch and its missing leaves."
+            explanation = (
+                "No complete route was found. The steps below show the closest route the planner could build, "
+                "and the missing list shows what is still required."
+            )
         return {
             "target": core.normalize(target),
             "found": found,

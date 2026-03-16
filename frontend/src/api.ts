@@ -10,11 +10,26 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
+async function readErrorMessage(response: Response): Promise<string> {
+  const detail = await response.text();
+  if (!detail) {
+    return `Request failed: ${response.status}`;
+  }
+  try {
+    const payload = JSON.parse(detail) as { detail?: unknown };
+    if (typeof payload.detail === "string" && payload.detail.trim()) {
+      return payload.detail;
+    }
+  } catch {
+    // Fall back to raw text for non-JSON responses.
+  }
+  return detail;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, init);
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed: ${response.status}`);
+    throw new Error(await readErrorMessage(response));
   }
   return response.json() as Promise<T>;
 }
@@ -65,6 +80,10 @@ export const api = {
     body.append("file", file);
     return request<InventoryResponse>("/api/inventory/import/csv", { method: "POST", body });
   },
+  importLatestOutwardInventory: () =>
+    request<InventoryResponse>("/api/inventory/import/outward-sync", {
+      method: "POST",
+    }),
   importExcel: async (file: File) => {
     const body = new FormData();
     body.append("file", file);

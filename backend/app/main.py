@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Query, UploadFile
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from .schemas import (
@@ -54,6 +54,18 @@ def create_app() -> FastAPI:
     @app.post("/api/inventory/import/csv")
     async def import_inventory_csv(file: UploadFile = File(...)) -> dict:
         return app.state.service.import_csv_inventory(await file.read())
+
+    @app.post("/api/inventory/import/outward-sync")
+    def import_latest_outward_inventory() -> dict:
+        try:
+            return app.state.service.import_latest_outward_inventory()
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="Latest Outward inventory import failed. The file was found, but it could not be imported.",
+            ) from exc
 
     @app.post("/api/inventory/import/excel")
     async def import_inventory_excel(file: UploadFile = File(...)) -> dict:

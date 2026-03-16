@@ -52,11 +52,10 @@ export function BestDirectCards({
       {rows.map((row) => (
         <article key={`${row.result}-${row.station}-${row.ingredients}`} className="result-card">
           <div className="result-card-grid">
-            <div className="result-card-content">
+            <div className="result-card-content result-card-content--compact">
               <div className="result-card-topline">
                 <div className="result-card-title-block">
                   <h3>{row.result}</h3>
-                  <p>{row.station}</p>
                 </div>
                 <div className="result-card-side">
                   <div className="score-badge" title="Real smart-score ranking">
@@ -65,23 +64,27 @@ export function BestDirectCards({
                 </div>
               </div>
               <div className="result-card-meta">
-                <span>Crafts possible {row.max_crafts}</span>
-                <span>Total made {row.max_total_output}</span>
+                <span className="result-card-pill">{row.station}</span>
+                <span className="result-card-pill">Crafts {row.max_crafts}</span>
+                <span className="result-card-pill">Total {row.max_total_output}</span>
               </div>
-              <div className="result-card-detail">
-                <span className="result-card-detail-label">Recipe</span>
-                <strong className="result-card-detail-value" title={recipeSummary(row)}>
-                  {recipeSummary(row)}
-                </strong>
-              </div>
-              {effectSummary(row) ? (
+              <div className="result-card-detail-grid">
+                <div className="result-card-detail">
+                  <span className="result-card-detail-label">Recipe</span>
+                  <strong className="result-card-detail-value" title={recipeSummary(row)}>
+                    {recipeSummary(row)}
+                  </strong>
+                </div>
                 <div className="result-card-detail">
                   <span className="result-card-detail-label">Buffs</span>
-                  <span className="result-card-detail-value result-card-detail-note" title={effectSummary(row)}>
-                    {effectSummary(row)}
+                  <span
+                    className="result-card-detail-value result-card-detail-note"
+                    title={effectSummary(row) || "No buffs"}
+                  >
+                    {effectSummary(row) || "No buffs"}
                   </span>
                 </div>
-              ) : null}
+              </div>
             </div>
           </div>
         </article>

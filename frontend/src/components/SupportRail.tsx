@@ -19,7 +19,11 @@ export function SupportRail({
   nearThreshold,
   onNearThresholdChange,
   stationFilterNote,
+  importStatus,
+  outwardSyncPath,
   onBulkFile,
+  onLoadLatestOutwardInventory,
+  onCopyOutwardSyncPath,
 }: {
   leftCollapsed: boolean;
   onToggleRail: () => void;
@@ -34,8 +38,22 @@ export function SupportRail({
   nearThreshold: number;
   onNearThresholdChange: (value: number) => void;
   stationFilterNote: string;
+  importStatus: {
+    tone: "idle" | "success" | "error";
+    title: string;
+    detail: string;
+    lastLoadedSource: string;
+    lastAttemptedSource: string | null;
+  };
+  outwardSyncPath: string;
   onBulkFile: (file: File | null) => void;
+  onLoadLatestOutwardInventory: () => void;
+  onCopyOutwardSyncPath: () => void;
 }) {
+  const compactWatchedPath = outwardSyncPath.includes("OutwardCraftSync")
+    ? outwardSyncPath.slice(outwardSyncPath.indexOf("OutwardCraftSync"))
+    : outwardSyncPath;
+
   return (
     <aside className="utility-rail left-column">
       <div className="utility-rail__header">
@@ -144,23 +162,61 @@ export function SupportRail({
           </Panel>
 
           <Panel
-            title="Bulk add inventory"
-            description="Upload a CSV or Excel inventory file."
+            title="Inventory sync"
+            description="Primary: pull the newest Outward export. Fallback: upload a file yourself."
             className="panel-section accordion-item"
             collapsible
             collapsed={!railSections.bulk}
             onToggle={() => onToggleSection("bulk")}
           >
-            <div className="upload-stack">
-              <label className="button subtle file-button bulk-upload-button">
-                Upload CSV / Excel
-                <input
-                  type="file"
-                  accept=".csv,.xlsx"
-                  onChange={(event: ChangeEvent<HTMLInputElement>) => onBulkFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <small className="field-note">Use the app&apos;s exported `item,qty` file or another matching sheet.</small>
+            <div className="upload-stack sync-stack">
+              <div className="sync-callout">
+                <span className="sync-recommendation">Recommended</span>
+                <p className="sync-helper">Pull the newest mod export from Documents.</p>
+              </div>
+
+              <button type="button" className="button primary bulk-upload-button sync-primary-button" onClick={onLoadLatestOutwardInventory}>
+                Load latest Outward inventory
+              </button>
+
+              <div className={classNames("sync-status-card", `is-${importStatus.tone}`)} aria-live="polite">
+                <div className="sync-status-head">
+                  <strong>{importStatus.title}</strong>
+                  <span className={classNames("sync-status-badge", `is-${importStatus.tone}`)}>
+                    {importStatus.tone === "success" ? "Success" : importStatus.tone === "error" ? "Needs attention" : "Ready"}
+                  </span>
+                </div>
+                <p>{importStatus.detail}</p>
+                <div className="sync-status-meta">
+                  <span>Last loaded: {importStatus.lastLoadedSource}</span>
+                  <span>Last attempt: {importStatus.lastAttemptedSource ?? "None yet"}</span>
+                </div>
+              </div>
+
+              <div className="sync-path-block">
+                <div className="sync-path-head">
+                  <span className="sync-path-label">Watched file</span>
+                  <button type="button" className="button subtle tiny path-copy-button" onClick={onCopyOutwardSyncPath}>
+                    Copy path
+                  </button>
+                </div>
+                <code className="sync-path-text" title={outwardSyncPath}>
+                  {compactWatchedPath}
+                </code>
+              </div>
+
+              <div className="sync-fallback">
+                <span className="sync-fallback-label">Manual fallback</span>
+                <label className="button subtle file-button bulk-upload-button sync-secondary-button">
+                  Upload CSV / Excel
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx"
+                    onChange={(event: ChangeEvent<HTMLInputElement>) => onBulkFile(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <small className="field-note">Use this if the sync file is missing or you want to import a different file.</small>
+              </div>
             </div>
           </Panel>
 

@@ -157,6 +157,7 @@ def test_inventory_mutations_share_one_refresh_contract_including_imports() -> N
     assert "await refreshInventoryDrivenViews();" in app_source
     assert "api.importText(" not in app_source
     assert "handleInventoryMutation(api.importCsv(file))" in app_source
+    assert "handleInventoryMutation(api.importLatestOutwardInventory())" in app_source
     assert "handleInventoryMutation(api.importExcel(file))" in app_source
 
 
@@ -279,7 +280,7 @@ def test_long_result_lists_use_internal_scroll_containers_without_changing_colum
     assert "max-height: clamp(16rem, 33vh, 22rem);" in css
     assert "overflow-y: auto;" in css
     assert ".results-rail .craft-table-shell {" in css
-    assert "min-height: 13rem;" in css
+    assert "min-height: 0;" in css
     assert "display: grid;" not in css[css.index(".utility-rail__scroll {"):css.index(".main-column,")]
     assert "grid-template-columns:" in css
     assert "clamp(250px, 18vw, 290px)" in css
@@ -337,20 +338,83 @@ def test_right_rail_cards_are_collapsible_and_can_stay_open_independently() -> N
     assert "Show more" not in results_source
     assert 'className="result-card-topline"' in views_source
     assert 'className="result-card-side"' in views_source
+    assert 'className="result-card-pill"' in views_source
+    assert 'className="result-card-detail-grid"' in views_source
     assert 'className="near-card-topline"' in views_source
     assert ".craft-table-controls {" in css
     assert ".table-option-chip {" in css
 
 
-def test_bulk_add_card_keeps_only_the_upload_action() -> None:
+def test_inventory_sync_card_prioritizes_outward_sync_and_keeps_manual_upload_as_fallback() -> None:
     support_rail_source = read_frontend("components/SupportRail.tsx")
     css = read_frontend("styles/app.css")
 
     assert "Paste text" not in support_rail_source
+    assert "Load latest Outward inventory" in support_rail_source
     assert "Upload CSV / Excel" in support_rail_source
-    assert 'className="upload-stack"' in support_rail_source
+    assert "Recommended" in support_rail_source
+    assert "Last loaded:" in support_rail_source
+    assert "Watched file" in support_rail_source
+    assert "Copy path" in support_rail_source
+    assert 'className="upload-stack sync-stack"' in support_rail_source
     assert ".upload-stack {" in css
     assert ".bulk-upload-button {" in css
+    assert ".sync-status-card {" in css
+    assert ".sync-path-text {" in css
+
+
+def test_planner_view_surfaces_route_status_steps_and_honest_inventory_labels() -> None:
+    app_source = read_frontend("App.tsx")
+    css = read_frontend("styles/app.css")
+
+    assert "planner-status-strip" in app_source
+    assert "Complete route available" in app_source
+    assert "Partial route shown" in app_source
+    assert "Bag after route" in app_source
+    assert "Current bag" in app_source
+    assert "planner-step-list" in app_source
+    assert "planner-step-chip" in app_source
+    assert "planner-route-shell" in app_source
+    assert ".planner-status-strip {" in css
+    assert ".planner-summary-grid {" in css
+    assert ".planner-step-list {" in css
+    assert ".planner-step-chip.is-missing {" in css
+
+
+def test_import_shortcut_surfaces_success_status_and_json_error_details() -> None:
+    app_source = read_frontend("App.tsx")
+    api_source = read_frontend("api.ts")
+    css = read_frontend("styles/app.css")
+
+    assert "const [statusMessage, setStatusMessage] = useState<string | null>(null);" in app_source
+    assert "const [importStatus, setImportStatus] = useState<InventoryImportStatus>(INITIAL_IMPORT_STATUS);" in app_source
+    assert 'title: "Latest Outward inventory loaded."' in app_source
+    assert 'title: "Latest Outward inventory load failed."' in app_source
+    assert "Outward sync path copied." in app_source
+    assert 'className="success-banner"' in app_source
+    assert "importLatestOutwardInventory: () =>" in api_source
+    assert "JSON.parse(detail)" in api_source
+    assert ".success-banner {" in css
+    assert ".error-banner {" in css
+
+
+def test_inventory_editor_uses_clearer_export_quick_add_and_table_action_labels() -> None:
+    editor_source = read_frontend("components/InventoryEditor.tsx")
+    css = read_frontend("styles/app.css")
+
+    assert "Export CSV" in editor_source
+    assert "Find an ingredient" in editor_source
+    assert "Quantity" in editor_source
+    assert 'className="quick-qty-input"' in editor_source
+    assert "In bag" in editor_source
+    assert "<th>Save</th>" in editor_source
+    assert "table-category-tag" in editor_source
+    assert "row-apply-button" in editor_source
+    assert "row-remove-button" in editor_source
+    assert ".quick-qty-input {" in css
+    assert ".table-category-tag {" in css
+    assert ".row-apply-button {" in css
+    assert ".row-remove-button {" in css
 
 
 def test_scrollbars_are_thin_and_scoped_to_scroll_regions() -> None:

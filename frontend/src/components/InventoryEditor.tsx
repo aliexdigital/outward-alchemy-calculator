@@ -57,35 +57,52 @@ export function InventoryEditor({
 }) {
   return (
     <Panel
-      title="Inventory input"
-      description="Search, add, filter, and edit the live inventory behind every result."
+      title="Inventory manager"
+      description="Search, add, filter, and edit the live inventory used by every result."
       className="inventory-workspace"
     >
       <div className="inventory-summary-bar">
         <div className="inventory-summary-head">
           <div className="inventory-summary-copy">
             <h3>Inventory overview</h3>
-            <p>{inventory?.items.length ? "Live totals from the canonical inventory." : "Add items below or import a list to begin."}</p>
+            <p>
+              {inventory?.items.length
+                ? "Live totals used by the craft, planner, and shopping views."
+                : "Load the latest Outward inventory or add items manually to begin."}
+            </p>
           </div>
-          <button type="button" className="button subtle summary-action-button" onClick={onDownloadInventoryCsv}>
-            CSV
+          <button type="button" className="button subtle summary-action-button" onClick={onDownloadInventoryCsv} title="Download the current inventory as CSV">
+            Export CSV
           </button>
         </div>
         <div className="inventory-summary-row">
-          <StatCard className="summary-stat" label="Unique items" value={inventory?.unique_items ?? 0} />
-          <StatCard className="summary-stat" label="Total quantity" value={inventory?.total_quantity ?? 0} />
+          <StatCard
+            className="summary-stat"
+            label="Unique items"
+            value={inventory?.unique_items ?? 0}
+            detail="Different ingredients currently tracked"
+          />
+          <StatCard
+            className="summary-stat"
+            label="Total quantity"
+            value={inventory?.total_quantity ?? 0}
+            detail="Combined stack count across the whole bag"
+          />
         </div>
       </div>
 
       <div className="inventory-editor">
         <form className="quick-add-row control-strip" onSubmit={(event) => void onQuickAdd(event)}>
           <label className="field grow">
-            <span>Search items</span>
+            <div className="field-head">
+              <span>Find an ingredient</span>
+              <small>Start typing to match the known item list</small>
+            </div>
             <input
               list="ingredient-options"
               value={quickAddValue}
               onChange={(event) => onQuickAddValueChange(event.target.value)}
-              placeholder="Start typing an ingredient..."
+              placeholder="Search or paste an item name..."
             />
             <datalist id="ingredient-options">
               {ingredientOptions.map((ingredient) => (
@@ -94,15 +111,21 @@ export function InventoryEditor({
             </datalist>
           </label>
           <label className="field quantity-field">
-            <span>Qty</span>
+            <div className="field-head">
+              <span>Quantity</span>
+              <small>Whole number</small>
+            </div>
             <input
+              className="quick-qty-input"
               type="number"
               min={1}
+              step={1}
+              inputMode="numeric"
               value={quickQty}
               onChange={(event) => onQuickQtyChange(Math.max(1, Number(event.target.value) || 1))}
             />
           </label>
-          <button type="submit" className="button primary">
+          <button type="submit" className="button primary quick-add-button">
             Add
           </button>
         </form>
@@ -133,7 +156,7 @@ export function InventoryEditor({
             <div className="inventory-table-head">
               <div className="inventory-table-copy">
                 <strong>Ingredient table</strong>
-                <span>Edit qty, then Apply. Remove clears the item.</span>
+                <span>Toggle items on quickly, edit quantities, then save or remove the row.</span>
               </div>
               <div className="inventory-table-tools">
                 <label className="owned-toggle">
@@ -146,20 +169,20 @@ export function InventoryEditor({
               </div>
             </div>
             <div className="inventory-table-stats">
-              <span>{filteredCatalogRows.length} visible</span>
-              <span>{inventory?.items.length ?? 0} owned</span>
+              <span>{filteredCatalogRows.length} visible after filters</span>
+              <span>{inventory?.items.length ?? 0} currently owned</span>
             </div>
 
             <div className="table-shell ingredient-table-shell">
               <table className="data-table ingredient-table">
                 <thead>
                   <tr>
-                    <th>Have it</th>
+                    <th>In bag</th>
                     <th>Ingredient</th>
                     <th>Category</th>
                     <th>Buffs</th>
                     <th>Qty</th>
-                    <th>Apply</th>
+                    <th>Save</th>
                     <th>Remove</th>
                   </tr>
                 </thead>
@@ -169,16 +192,21 @@ export function InventoryEditor({
                     const draftValue = draftQuantities[row.item] ?? String(currentQty);
 
                     return (
-                      <tr key={row.item}>
+                      <tr key={row.item} className={classNames("ingredient-row", currentQty > 0 && "owned-row")}>
                         <td>
                           <input
                             type="checkbox"
                             checked={currentQty > 0}
+                            aria-label={`Toggle ${row.item} in the inventory`}
                             onChange={(event) => onToggleInventoryItem(row.item, event.target.checked, currentQty)}
                           />
                         </td>
-                        <td>{row.item}</td>
-                        <td>{row.category}</td>
+                        <td className="ingredient-name-cell">
+                          <span className="table-result-name">{row.item}</span>
+                        </td>
+                        <td>
+                          <span className="table-category-tag">{row.category}</span>
+                        </td>
                         <td>
                           <span className="buffs-cell" title={row.effects || "None"}>
                             {row.effects || "None"}
@@ -189,6 +217,9 @@ export function InventoryEditor({
                             className="qty-input qty-cell-input"
                             type="number"
                             min={0}
+                            step={1}
+                            inputMode="numeric"
+                            aria-label={`Quantity for ${row.item}`}
                             value={draftValue}
                             onChange={(event) => onDraftQuantityChange(row.item, event.target.value)}
                           />
@@ -196,7 +227,7 @@ export function InventoryEditor({
                         <td>
                           <button
                             type="button"
-                            className="button subtle tiny row-action-button"
+                            className="button subtle tiny row-action-button row-apply-button"
                             onClick={() => onApplyInventoryQty(row.item)}
                           >
                             Apply
@@ -205,7 +236,7 @@ export function InventoryEditor({
                         <td>
                           <button
                             type="button"
-                            className="button subtle tiny row-action-button"
+                            className="button subtle tiny row-action-button row-remove-button"
                             onClick={() => onRemoveInventoryItem(row.item)}
                           >
                             Remove

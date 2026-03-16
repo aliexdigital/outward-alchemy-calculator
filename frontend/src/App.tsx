@@ -43,6 +43,85 @@ import type {
 } from "./types";
 import type { NavItem, RailSectionId } from "./lib/app-config";
 
+const OUTWARD_SYNC_PATH = String.raw`C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv`;
+
+type InventoryImportSource = "Outward sync" | "Manual upload";
+
+type InventoryImportStatus = {
+  tone: "idle" | "success" | "error";
+  title: string;
+  detail: string;
+  lastLoadedSource: string;
+  lastAttemptedSource: InventoryImportSource | null;
+};
+
+type InventoryMutationResult = { ok: true } | { ok: false; message: string };
+type PlannerStepKind = "craft" | "use" | "group" | "missing" | "note";
+type PlannerDisplayStep = {
+  indent: number;
+  kind: PlannerStepKind;
+  text: string;
+  raw: string;
+};
+
+const INITIAL_IMPORT_STATUS: InventoryImportStatus = {
+  tone: "idle",
+  title: "Ready to sync inventory.",
+  detail: "Use Outward sync to pull the newest mod export.",
+  lastLoadedSource: "Not loaded yet",
+  lastAttemptedSource: null,
+};
+
+function parsePlannerSteps(lines: string[]): PlannerDisplayStep[] {
+  return lines
+    .map((rawLine) => rawLine.replace(/\r/g, ""))
+    .filter((rawLine) => rawLine.trim().length > 0)
+    .map((rawLine) => {
+      const indentMatch = rawLine.match(/^(\s*)/);
+      const indent = Math.floor((indentMatch?.[1].length ?? 0) / 2);
+      const trimmed = rawLine.trim().replace(/^- /, "");
+
+      let kind: PlannerStepKind = "note";
+      if (trimmed.startsWith("Craft ")) {
+        kind = "craft";
+      } else if (trimmed.startsWith("Use existing:")) {
+        kind = "use";
+      } else if (trimmed.startsWith("Fill group")) {
+        kind = "group";
+      } else if (trimmed.startsWith("Missing ingredient")) {
+        kind = "missing";
+      }
+
+      return {
+        indent,
+        kind,
+        text: trimmed,
+        raw: rawLine,
+      };
+    });
+}
+
+function plannerStatusTone(found: boolean, stepCount: number): "success" | "warning" | "error" {
+  if (found) return "success";
+  if (stepCount > 0) return "warning";
+  return "error";
+}
+
+function plannerStepLabel(kind: PlannerStepKind): string {
+  switch (kind) {
+    case "craft":
+      return "Craft";
+    case "use":
+      return "Use";
+    case "group":
+      return "Group";
+    case "missing":
+      return "Missing";
+    default:
+      return "Note";
+  }
+}
+
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null);
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
@@ -77,6 +156,8 @@ export default function App() {
   const [databaseStations, setDatabaseStations] = useState<string[]>([]);
   const [databaseCategories, setDatabaseCategories] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<InventoryImportStatus>(INITIAL_IMPORT_STATUS);
   const [isLoading, setIsLoading] = useState(true);
   const [hasBootstrapped, setHasBootstrapped] = useState(false);
 
@@ -191,6 +272,19 @@ export default function App() {
   const activeSummary = VIEW_SUMMARIES[activeSection] ?? "";
   const activeApiSummary = activeView?.apis?.join(" | ") ?? "";
   const stationFilterNote = createStationFilterNote(selectedStations);
+  const plannerSteps = useMemo(() => parsePlannerSteps(plannerResult?.lines ?? []), [plannerResult]);
+  const plannerMissingTotal = useMemo(
+    () => (plannerResult?.missing ?? []).reduce((sum, item) => sum + item.qty, 0),
+    [plannerResult],
+  );
+  const plannerRemainingTotal = useMemo(
+    () => (plannerResult?.remaining_inventory ?? []).reduce((sum, item) => sum + item.qty, 0),
+    [plannerResult],
+  );
+  const plannerTone = useMemo(
+    () => plannerStatusTone(plannerResult?.found ?? false, plannerSteps.length),
+    [plannerResult, plannerSteps.length],
+  );
 
   const executePlanner = useCallback(async () => {
     if (!planTarget) return;
@@ -259,9 +353,16 @@ export default function App() {
     void executeShoppingList();
   }, [executeShoppingList, shoppingRequested]);
 
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timeoutId = window.setTimeout(() => setStatusMessage(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [statusMessage]);
+
   const handleInventoryMutation = useCallback(
     async (operation: Promise<InventoryResponse>) => {
       try {
+        setStatusMessage(null);
         setError(null);
         const nextInventory = await operation;
         startTransition(() => {
@@ -270,8 +371,14 @@ export default function App() {
           if (shoppingRequested) setShoppingResult(null);
         });
         await refreshInventoryDrivenViews();
+        const result: InventoryMutationResult = { ok: true };
+        return result;
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Inventory update failed.");
+        setStatusMessage(null);
+        const message = err instanceof Error ? err.message : "Inventory update failed.";
+        setError(message);
+        const result: InventoryMutationResult = { ok: false, message };
+        return result;
       }
     },
     [plannerRequested, refreshInventoryDrivenViews, shoppingRequested],
@@ -311,10 +418,58 @@ export default function App() {
 
   const handleBulkFile = async (file: File | null) => {
     if (!file) return;
-    if (file.name.toLowerCase().endsWith(".csv")) {
-      await handleInventoryMutation(api.importCsv(file));
-    } else {
-      await handleInventoryMutation(api.importExcel(file));
+    const imported = file.name.toLowerCase().endsWith(".csv")
+      ? await handleInventoryMutation(api.importCsv(file))
+      : await handleInventoryMutation(api.importExcel(file));
+    if (imported.ok) {
+      setImportStatus({
+        tone: "success",
+        title: "Manual inventory import succeeded.",
+        detail: `Imported ${file.name} into the live inventory.`,
+        lastLoadedSource: `Manual upload (${file.name})`,
+        lastAttemptedSource: "Manual upload",
+      });
+      setStatusMessage(`Inventory loaded from ${file.name}.`);
+      return;
+    }
+    setImportStatus((current) => ({
+      ...current,
+      tone: "error",
+      title: "Manual inventory import failed.",
+      detail: imported.message,
+      lastAttemptedSource: "Manual upload",
+    }));
+  };
+
+  const handleLatestOutwardInventory = async () => {
+    const imported = await handleInventoryMutation(api.importLatestOutwardInventory());
+    if (imported.ok) {
+      setImportStatus({
+        tone: "success",
+        title: "Latest Outward inventory loaded.",
+        detail: "Imported the newest mod export from your Documents sync folder.",
+        lastLoadedSource: "Outward sync",
+        lastAttemptedSource: "Outward sync",
+      });
+      setStatusMessage("Latest Outward inventory loaded.");
+      return;
+    }
+    setImportStatus((current) => ({
+      ...current,
+      tone: "error",
+      title: "Latest Outward inventory load failed.",
+      detail: imported.message,
+      lastAttemptedSource: "Outward sync",
+    }));
+  };
+
+  const handleCopyOutwardSyncPath = async () => {
+    try {
+      await navigator.clipboard.writeText(OUTWARD_SYNC_PATH);
+      setError(null);
+      setStatusMessage("Outward sync path copied.");
+    } catch {
+      setError("Could not copy the Outward sync path. You can still select it manually.");
     }
   };
 
@@ -350,7 +505,11 @@ export default function App() {
           nearThreshold={nearThreshold}
           onNearThresholdChange={setNearThreshold}
           stationFilterNote={stationFilterNote}
+          importStatus={importStatus}
+          outwardSyncPath={OUTWARD_SYNC_PATH}
           onBulkFile={(file) => void handleBulkFile(file)}
+          onLoadLatestOutwardInventory={() => void handleLatestOutwardInventory()}
+          onCopyOutwardSyncPath={() => void handleCopyOutwardSyncPath()}
         />
 
         <section className="main-column center-column">
@@ -378,7 +537,16 @@ export default function App() {
             </div>
           </section>
 
-          {error ? <div className="error-banner">{error}</div> : null}
+          {error ? (
+            <div className="error-banner" role="alert">
+              {error}
+            </div>
+          ) : null}
+          {!error && statusMessage ? (
+            <div className="success-banner" role="status" aria-live="polite">
+              {statusMessage}
+            </div>
+          ) : null}
 
           {activeSection === "Craft now" ? (
             <>
@@ -416,7 +584,7 @@ export default function App() {
           ) : null}
 
           {activeSection === "Plan a target" ? (
-            <Panel title="Plan a target" description="Run the recursive planner against the current inventory.">
+            <Panel title="Plan a target" description="Map the closest craft route for one target using the current inventory.">
               <div className="view-stack">
                 <div className="inline-actions view-toolbar">
                   <label className="field grow">
@@ -444,29 +612,112 @@ export default function App() {
                     Run planner
                   </button>
                 </div>
-                <div className="info-strip">
-                  {plannerResult?.explanation ??
-                    "Pick a target to see the best route through the recipes your current inventory can support."}
-                </div>
                 {plannerResult ? (
-                  <>
-                    <div className="split-columns">
+                  <div className="planner-view-stack">
+                    <div className={classNames("planner-status-strip", `is-${plannerTone}`)}>
+                      <div className="planner-status-copy">
+                        <strong>
+                          {plannerResult.found
+                            ? "Complete route available"
+                            : plannerSteps.length
+                              ? "Partial route shown"
+                              : "No route available"}
+                        </strong>
+                        <p>{plannerResult.explanation}</p>
+                      </div>
+                      <span className="planner-status-pill">
+                        {plannerResult.found ? "Ready to craft" : plannerSteps.length ? "Needs items" : "Blocked"}
+                      </span>
+                    </div>
+
+                    <div className="planner-summary-grid">
+                      <div className="planner-summary-panel">
+                        <span className="planner-summary-label">Target item</span>
+                        <strong className="planner-summary-value">{plannerResult.target || planTarget}</strong>
+                        <span className="planner-summary-note">The route is centered on this craft goal.</span>
+                      </div>
+                      <div className="planner-summary-panel">
+                        <span className="planner-summary-label">Route lines</span>
+                        <strong className="planner-summary-value">{plannerSteps.length}</strong>
+                        <span className="planner-summary-note">
+                          {plannerSteps.length ? "Craft, use, and missing calls from the current route." : "No route lines were produced."}
+                        </span>
+                      </div>
+                      <div className="planner-summary-panel">
+                        <span className="planner-summary-label">Still needed</span>
+                        <strong className="planner-summary-value">{plannerMissingTotal}</strong>
+                        <span className="planner-summary-note">
+                          {plannerResult.missing.length
+                            ? `${plannerResult.missing.length} missing item${plannerResult.missing.length === 1 ? "" : "s"}`
+                            : "Nothing else is required for this route."}
+                        </span>
+                      </div>
+                      <div className="planner-summary-panel">
+                        <span className="planner-summary-label">
+                          {plannerResult.found ? "Bag after route" : "Bag shown"}
+                        </span>
+                        <strong className="planner-summary-value">{plannerRemainingTotal}</strong>
+                        <span className="planner-summary-note">
+                          {plannerResult.found
+                            ? "What remains after following the route."
+                            : "Current inventory snapshot used for this partial result."}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="split-columns planner-inventory-columns">
                       <InventoryList
                         title="Still needed"
                         items={plannerResult.missing}
                         emptyMessage="You already have everything needed for this route."
                       />
                       <InventoryList
-                        title="Left in your bag"
+                        title={plannerResult.found ? "Bag after route" : "Current bag"}
                         items={plannerResult.remaining_inventory}
-                        emptyMessage="This route would use up every item you committed to the plan."
+                        emptyMessage={
+                          plannerResult.found
+                            ? "This route would use up every item you committed to the craft."
+                            : "The planner did not need to reserve anything from the current bag."
+                        }
                       />
                     </div>
-                    <div className="info-strip">Follow this route step by step to craft your target with what you have right now.</div>
-                    <pre className="code-block">{plannerResult.lines.join("\n") || "You can make this without any extra crafting steps."}</pre>
-                  </>
+                    <div className="planner-route-shell">
+                      <div className="planner-route-head">
+                        <strong>Planner route</strong>
+                        <span>
+                          {plannerResult.found
+                            ? "Follow these lines in order."
+                            : "Missing requirements are marked inline."}
+                        </span>
+                      </div>
+                      {!plannerResult.found && plannerSteps.length ? (
+                        <p className="planner-route-note">
+                          This is the closest route the planner could prove with the current bag and filters. It stops where required
+                          ingredients run out.
+                        </p>
+                      ) : null}
+                      {plannerSteps.length ? (
+                        <div className="planner-step-list">
+                          {plannerSteps.map((step, index) => (
+                            <div key={`${index}-${step.raw}`} className={classNames("planner-step", `is-${step.kind}`)}>
+                              <div className="planner-step-line" style={{ paddingLeft: `${step.indent * 1.1}rem` }}>
+                                <span className={classNames("planner-step-chip", `is-${step.kind}`)}>
+                                  {plannerStepLabel(step.kind)}
+                                </span>
+                                <span className="planner-step-text">{step.text}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="empty-state">No additional route lines were needed for this target.</div>
+                      )}
+                    </div>
+                  </div>
                 ) : (
-                  <div className="empty-state">Choose a target and run the planner to see a player-friendly craft route.</div>
+                  <div className="empty-state">
+                    Choose a target and run the planner to see the closest craft route your current inventory can support.
+                  </div>
                 )}
               </div>
             </Panel>

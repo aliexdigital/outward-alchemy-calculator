@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 
 import pandas as pd
 from fastapi.testclient import TestClient
@@ -139,6 +140,58 @@ def test_csv_import_updates_canonical_inventory_and_results() -> None:
 
     assert inventory["items"] == [{"item": "Clean Water", "qty": 2}, {"item": "Gravel Beetle", "qty": 2}]
     assert result_map(direct["items"])["Cool Potion"]["max_crafts"] == 2
+
+
+def test_fixed_path_csv_import_reuses_the_csv_import_logic(monkeypatch, tmp_path: Path) -> None:
+    client = make_client()
+
+    outward_sync_csv = tmp_path / "current_inventory.csv"
+    outward_sync_csv.write_bytes(csv_bytes([{"item": "Clean Water", "qty": 2}, {"item": "Gravel Beetle", "qty": 2}]))
+    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+
+    response = client.post("/api/inventory/import/outward-sync")
+    response.raise_for_status()
+
+    inventory = client.get("/api/inventory").json()
+    direct = client.get("/api/results/direct?stations=Alchemy+Kit&limit=20").json()
+
+    assert inventory["items"] == [{"item": "Clean Water", "qty": 2}, {"item": "Gravel Beetle", "qty": 2}]
+    assert result_map(direct["items"])["Cool Potion"]["max_crafts"] == 2
+
+
+def test_fixed_path_csv_import_returns_friendly_not_found_message(monkeypatch, tmp_path: Path) -> None:
+    client = make_client()
+
+    outward_sync_csv = tmp_path / "missing_inventory.csv"
+    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+
+    response = client.post("/api/inventory/import/outward-sync")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == (
+        f"Latest Outward inventory file not found at {outward_sync_csv}. "
+        "Export your inventory from the mod and try again."
+    )
+
+
+def test_fixed_path_csv_import_returns_friendly_failure_message(monkeypatch, tmp_path: Path) -> None:
+    client = make_client()
+
+    outward_sync_csv = tmp_path / "current_inventory.csv"
+    outward_sync_csv.write_bytes(csv_bytes([{"item": "Clean Water", "qty": 2}]))
+    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+
+    def broken_import_csv_file(self, path: Path) -> dict:
+        raise ValueError("bad csv")
+
+    monkeypatch.setattr("backend.app.services.CalculatorService.import_csv_inventory_file", broken_import_csv_file)
+
+    response = client.post("/api/inventory/import/outward-sync")
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == (
+        "Latest Outward inventory import failed. The file was found, but it could not be imported."
+    )
 
 
 def test_excel_import_updates_canonical_inventory_and_results() -> None:
