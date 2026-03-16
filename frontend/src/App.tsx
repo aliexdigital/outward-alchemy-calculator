@@ -46,8 +46,6 @@ import type {
 } from "./types";
 import type { NavItem, RailSectionId } from "./lib/app-config";
 
-const OUTWARD_SYNC_PATH = String.raw`C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv`;
-
 type InventoryImportSource = "Outward sync" | "Manual upload";
 
 type InventoryImportStatus = {
@@ -314,6 +312,7 @@ export default function App() {
   const activeView = VIEW_CONFIG.find((entry) => entry.id === activeSection);
   const activeSummary = VIEW_SUMMARIES[activeSection] ?? "";
   const activeApiSummary = activeView?.apis?.join(" | ") ?? "";
+  const outwardSyncPath = metadata?.outward_sync_path ?? String.raw`Documents\OutwardCraftSync\current_inventory.csv`;
   const stationFilterNote = createStationFilterNote(selectedStations);
   const plannerSteps = useMemo(() => parsePlannerSteps(plannerResult?.lines ?? []), [plannerResult]);
   const plannerMissingTotal = useMemo(
@@ -596,7 +595,7 @@ export default function App() {
 
   const handleCopyOutwardSyncPath = async () => {
     try {
-      await navigator.clipboard.writeText(OUTWARD_SYNC_PATH);
+      await navigator.clipboard.writeText(outwardSyncPath);
       setError(null);
       setStatusMessage("Outward sync path copied.");
     } catch {
@@ -637,7 +636,7 @@ export default function App() {
           onNearThresholdChange={setNearThreshold}
           stationFilterNote={stationFilterNote}
           importStatus={importStatus}
-          outwardSyncPath={OUTWARD_SYNC_PATH}
+          outwardSyncPath={outwardSyncPath}
           onBulkFile={(file) => void handleBulkFile(file)}
           onLoadLatestOutwardInventory={() => void handleLatestOutwardInventory()}
           onCopyOutwardSyncPath={() => void handleCopyOutwardSyncPath()}

@@ -120,11 +120,15 @@ def test_ingredient_lists_render_with_commas() -> None:
 
 def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
     app_source = read_frontend("App.tsx")
+    type_source = read_frontend("types.ts")
 
     assert app_source.count("api.getMetadata(") == 1
     assert "api.getDashboard(" in app_source
     assert "api.getDirect(" in app_source
     assert "api.getNear(" in app_source
+    assert "outward_sync_path: string;" in type_source
+    assert "metadata?.outward_sync_path" in app_source
+    assert "C:\\Users\\Alexandra" not in app_source
     assert "api.getOverview(" not in app_source
     assert "api.getInventory(" not in app_source
     assert 'if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;' not in app_source

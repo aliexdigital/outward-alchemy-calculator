@@ -39,4 +39,3 @@ python src/outward_wiki_sync.py
 ## Notes
 
 - The old legacy Streamlit UI files were removed because the project now uses the React + FastAPI app exclusively.
-- `gemini_boss.html` is still kept at the project root as a visual reference/mock, not as a live app entrypoint.

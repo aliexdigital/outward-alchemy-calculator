@@ -8,7 +8,9 @@ This project is built to be fast, readable, and beginner-friendly. The crafting 
 
 - **One-click Outward inventory sync**
   - Loads the latest exported inventory from:
-    - `Documents\OutwardCraftSync\current_inventory.csv`
+    - `%USERPROFILE%\Documents\OutwardCraftSync\current_inventory.csv`
+  - You can override this with:
+    - `OUTWARD_SYNC_INVENTORY_PATH`
 - **Manual CSV / Excel import fallback**
   - Import inventory files without changing the sync workflow
 - **Live inventory manager**
@@ -103,7 +105,7 @@ Or run each side manually:
 ### Recommended inventory workflow
 
 1. Export your inventory from the Outward mod to:
-   - `C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv`
+   - `%USERPROFILE%\Documents\OutwardCraftSync\current_inventory.csv`
 2. Open the app
 3. Click **Load latest Outward inventory**
 
@@ -159,10 +161,11 @@ python src/outward_wiki_sync.py
 ## Notes
 
 - The app is currently designed for local use.
-- The one-click Outward sync path is currently hardcoded in:
-  - `backend/app/services.py`
-  - `frontend/src/App.tsx`
-- If you want a different default sync path, update those constants and keep manual import as the fallback.
+- The default one-click Outward sync path is resolved on the backend as:
+  - `%USERPROFILE%\Documents\OutwardCraftSync\current_inventory.csv`
+- You can override it by setting:
+  - `OUTWARD_SYNC_INVENTORY_PATH`
+- The frontend reads the active sync path from backend metadata, so the path is no longer duplicated in multiple places.
 
 ## Status
 

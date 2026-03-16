@@ -462,7 +462,7 @@ def build_workbook(recipes_df: pd.DataFrame, groups: Dict[str, List[str]], out_p
     ws_dash["B5"] = "=COUNTA(UNIQUE(IngredientGroups!A2:A1048576))"
     ws_dash["A7"] = "Direct-craft logic"
     ws_dash["A7"].font = bold
-    ws_dash["A8"] = "Use the Streamlit app for exact craftability. Excel alone is not ideal for recipe groups like Water / Vegetable / Meat."
+    ws_dash["A8"] = "Use the app for exact craftability. Excel alone is not ideal for recipe groups like Water / Vegetable / Meat."
     for cell in ["A3", "A4", "A5"]:
         ws_dash[cell].fill = accent_fill
     ws_dash["A8"].fill = note_fill

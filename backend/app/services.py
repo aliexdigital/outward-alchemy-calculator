@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -16,7 +17,8 @@ from src import inventory_ops
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "src" / "data"
-OUTWARD_SYNC_INVENTORY_PATH = Path(r"C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv")
+OUTWARD_SYNC_ENV_VAR = "OUTWARD_SYNC_INVENTORY_PATH"
+DEFAULT_OUTWARD_SYNC_SUBPATH = Path("Documents") / "OutwardCraftSync" / "current_inventory.csv"
 BEST_DIRECT_SHORTLIST_LIMIT = 8
 NEAR_RESULTS_PREVIEW_LIMIT = 30
 CRAFTABLE_DEBUG_SORT_MODES = [
@@ -29,6 +31,13 @@ CRAFTABLE_DEBUG_SORT_MODES = [
     ("Sale value", "sale_value_total"),
     ("Result A-Z", "result"),
 ]
+
+
+def outward_sync_inventory_path() -> Path:
+    configured = os.environ.get(OUTWARD_SYNC_ENV_VAR, "").strip()
+    if configured:
+        return Path(configured).expanduser()
+    return Path.home() / DEFAULT_OUTWARD_SYNC_SUBPATH
 
 
 def _load_recipes() -> pd.DataFrame:
@@ -243,12 +252,13 @@ class CalculatorService:
         return self.import_csv_inventory(path.read_bytes())
 
     def import_latest_outward_inventory(self) -> dict:
-        if not OUTWARD_SYNC_INVENTORY_PATH.is_file():
+        sync_path = outward_sync_inventory_path()
+        if not sync_path.is_file():
             raise FileNotFoundError(
                 "Latest Outward inventory file not found at "
-                f"{OUTWARD_SYNC_INVENTORY_PATH}. Export your inventory from the mod and try again."
+                f"{sync_path}. Export your inventory from the mod and try again."
             )
-        return self.import_csv_inventory_file(OUTWARD_SYNC_INVENTORY_PATH)
+        return self.import_csv_inventory_file(sync_path)
 
     def import_excel_inventory(self, file_bytes: bytes) -> dict:
         imported = inventory_ops.inventory_from_df(pd.read_excel(BytesIO(file_bytes)))
@@ -791,6 +801,7 @@ class CalculatorService:
             "ingredients": list(self.data.item_catalog),
             "categories": [{"name": name, "items": items} for name, items in self.data.catalog_by_category.items()],
             "stations": list(self.data.station_options),
+            "outward_sync_path": str(outward_sync_inventory_path()),
             "recipe_count": int(len(self.data.recipes_df)),
             "recipes": _df_records(recipe_table),
             "ingredient_groups": [

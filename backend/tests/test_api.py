@@ -147,7 +147,7 @@ def test_fixed_path_csv_import_reuses_the_csv_import_logic(monkeypatch, tmp_path
 
     outward_sync_csv = tmp_path / "current_inventory.csv"
     outward_sync_csv.write_bytes(csv_bytes([{"item": "Clean Water", "qty": 2}, {"item": "Gravel Beetle", "qty": 2}]))
-    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+    monkeypatch.setattr("backend.app.services.outward_sync_inventory_path", lambda: outward_sync_csv)
 
     response = client.post("/api/inventory/import/outward-sync")
     response.raise_for_status()
@@ -163,7 +163,7 @@ def test_fixed_path_csv_import_returns_friendly_not_found_message(monkeypatch, t
     client = make_client()
 
     outward_sync_csv = tmp_path / "missing_inventory.csv"
-    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+    monkeypatch.setattr("backend.app.services.outward_sync_inventory_path", lambda: outward_sync_csv)
 
     response = client.post("/api/inventory/import/outward-sync")
 
@@ -179,7 +179,7 @@ def test_fixed_path_csv_import_returns_friendly_failure_message(monkeypatch, tmp
 
     outward_sync_csv = tmp_path / "current_inventory.csv"
     outward_sync_csv.write_bytes(csv_bytes([{"item": "Clean Water", "qty": 2}]))
-    monkeypatch.setattr("backend.app.services.OUTWARD_SYNC_INVENTORY_PATH", outward_sync_csv)
+    monkeypatch.setattr("backend.app.services.outward_sync_inventory_path", lambda: outward_sync_csv)
 
     def broken_import_csv_file(self, path: Path) -> dict:
         raise ValueError("bad csv")
@@ -462,10 +462,21 @@ def test_metadata_exposes_recipe_database_groups_and_item_stats() -> None:
     assert metadata["recipes"]
     assert metadata["ingredient_groups"]
     assert metadata["item_stats"]
+    assert metadata["outward_sync_path"].endswith(str(Path("Documents") / "OutwardCraftSync" / "current_inventory.csv"))
     stats = item_stat_map(metadata["item_stats"])
     assert "Clean Water" in stats
     assert stats["Clean Water"]["category"] == "Cooking ingredients"
     assert stats["Clean Water"]["effects"] == ""
+
+
+def test_metadata_uses_env_override_for_outward_sync_path(monkeypatch, tmp_path: Path) -> None:
+    configured_path = tmp_path / "sync" / "current_inventory.csv"
+    monkeypatch.setenv("OUTWARD_SYNC_INVENTORY_PATH", str(configured_path))
+
+    client = make_client()
+    metadata = client.get("/api/metadata").json()
+
+    assert metadata["outward_sync_path"] == str(configured_path)
 
 
 def test_verified_item_metadata_fields_are_exposed_in_item_stats() -> None:
