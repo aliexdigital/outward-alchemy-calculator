@@ -745,6 +745,48 @@ def test_planner_depth_changes_what_the_planner_can_reach() -> None:
     assert deep["found"] is True
 
 
+def test_recipe_visibility_debug_reports_planner_depth_changes_for_deeper_targets() -> None:
+    service = make_service(
+        [
+            {
+                "recipe_id": "stage-1",
+                "recipe_page": "Unit",
+                "section": "Depth",
+                "result": "Stage One",
+                "result_qty": 1,
+                "station": "Alchemy Kit",
+                "ingredients": "Leaf",
+            },
+            {
+                "recipe_id": "stage-2",
+                "recipe_page": "Unit",
+                "section": "Depth",
+                "result": "Stage Two",
+                "result_qty": 1,
+                "station": "Alchemy Kit",
+                "ingredients": "Stage One",
+            },
+            {
+                "recipe_id": "target",
+                "recipe_page": "Unit",
+                "section": "Depth",
+                "result": "Deep Elixir",
+                "result_qty": 1,
+                "station": "Alchemy Kit",
+                "ingredients": "Stage Two",
+            },
+        ]
+    )
+    service.replace_inventory([{"item": "Leaf", "qty": 1}])
+
+    shallow = service.recipe_visibility_debug("Deep Elixir", stations=["Alchemy Kit"], max_missing_slots=2, planner_depth=2)
+    deep = service.recipe_visibility_debug("Deep Elixir", stations=["Alchemy Kit"], max_missing_slots=2, planner_depth=3)
+
+    assert shallow["craftable_now"] is False
+    assert shallow["planner_found"] is False
+    assert deep["planner_found"] is True
+
+
 def test_near_craft_filter_requires_at_least_one_matched_slot() -> None:
     service = make_service(
         [

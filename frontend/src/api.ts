@@ -4,6 +4,7 @@ import type {
   InventoryResponse,
   MetadataResponse,
   PlannerResponse,
+  RecipeDebugResponse,
   ShoppingListResponse,
   NearResponse,
 } from "./types";
@@ -56,6 +57,14 @@ export const api = {
     if (limit) params.set("limit", String(limit));
     stations.forEach((station) => params.append("stations", station));
     return request<NearResponse>(`/api/results/near?${params.toString()}`);
+  },
+  getRecipeDebug: (result: string, stations: string[], maxMissingSlots: number, plannerDepth: number) => {
+    const params = new URLSearchParams();
+    params.set("result", result);
+    params.set("max_missing_slots", String(maxMissingSlots));
+    params.set("planner_depth", String(plannerDepth));
+    stations.forEach((station) => params.append("stations", station));
+    return request<RecipeDebugResponse>(`/api/results/recipe-debug?${params.toString()}`);
   },
   addInventoryItem: (item: string, qty: number) =>
     request<InventoryResponse>("/api/inventory/items/add", {

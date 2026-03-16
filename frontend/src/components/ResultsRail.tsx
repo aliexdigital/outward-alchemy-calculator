@@ -4,19 +4,10 @@ import type { ReactNode } from "react";
 import type { DirectResponse, NearResponse } from "../types";
 import {
   BestDirectCards,
-  CraftResultsTable,
-  type CraftResultsColumnVisibility,
-  type CraftResultsOptionalColumnId,
   NearCraftTable,
 } from "./data-views";
 import { StatCard, classNames } from "./ui";
-type RightRailSectionId = "best" | "full" | "near";
-
-const CRAFT_RESULTS_OPTIONAL_COLUMNS: { id: CraftResultsOptionalColumnId; label: string }[] = [
-  { id: "perCraft", label: "Per craft" },
-  { id: "craftsPossible", label: "Crafts possible" },
-  { id: "totalMade", label: "Total made" },
-];
+type RightRailSectionId = "craftable" | "near";
 
 function ResultsAccordionCard({
   title,
@@ -58,16 +49,12 @@ function ResultsAccordionCard({
 }
 
 export function ResultsRail({
-  activeSection,
-  bestDirect,
   craftNow,
   near,
   sortMode,
   sortModes,
   onSortModeChange,
 }: {
-  activeSection: string;
-  bestDirect: DirectResponse | null;
   craftNow: DirectResponse | null;
   near: NearResponse | null;
   sortMode: string;
@@ -75,14 +62,8 @@ export function ResultsRail({
   onSortModeChange: (value: string) => void;
 }) {
   const [openSections, setOpenSections] = useState<Record<RightRailSectionId, boolean>>({
-    best: true,
-    full: true,
+    craftable: true,
     near: false,
-  });
-  const [craftTableColumns, setCraftTableColumns] = useState<CraftResultsColumnVisibility>({
-    perCraft: false,
-    craftsPossible: false,
-    totalMade: false,
   });
 
   const toggleSection = (sectionId: RightRailSectionId) => {
@@ -92,72 +73,42 @@ export function ResultsRail({
     }));
   };
 
-  const toggleCraftTableColumn = (columnId: CraftResultsOptionalColumnId) => {
-    setCraftTableColumns((current) => ({
-      ...current,
-      [columnId]: !current[columnId],
-    }));
-  };
-
   return (
     <aside className="results-rail right-column">
       <ResultsAccordionCard
-        title="Best direct options"
-        description="Best things you can make right now from your current bag and stations."
-        open={openSections.best}
-        onToggle={() => toggleSection("best")}
+        title="Craftable recipes"
+        description="Every craftable recipe row you can make right now. Sorting changes order, not inclusion."
+        open={openSections.craftable}
+        onToggle={() => toggleSection("craftable")}
       >
-        <div className="stat-grid two-up compact-grid">
-          <StatCard label="Can make now" value={bestDirect?.count ?? 0} />
-          <StatCard label="Almost ready" value={bestDirect?.near_count ?? 0} />
-        </div>
-        <div className="results-preview">
-          <BestDirectCards rows={bestDirect?.items ?? []} />
-        </div>
-      </ResultsAccordionCard>
-
-      {activeSection === "Craft now" ? (
-        <ResultsAccordionCard
-          title="Full craftable list"
-          description="Everything you can make right now with your current inventory and station filters."
-          open={openSections.full}
-          onToggle={() => toggleSection("full")}
-        >
-          <div className="result-panel-stack">
+        <div className="result-panel-stack">
+          <div className="stat-grid two-up compact-grid">
+            <StatCard label="Can make now" value={craftNow?.count ?? 0} />
+            <StatCard label="Almost ready" value={craftNow?.near_count ?? 0} />
+          </div>
+          <div className="craftable-card-toolbar">
+            <label className="panel-select panel-select-compact">
+              <span>Sort craftable recipes</span>
+              <select value={sortMode} onChange={(event) => onSortModeChange(event.target.value)}>
+                {sortModes.map((mode) => (
+                  <option key={mode} value={mode}>
+                    {mode}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="info-strip compact-info-strip">
-              {craftNow?.count ?? 0} recipe{craftNow?.count === 1 ? "" : "s"} ready to craft right now.
-            </div>
-            <div className="craft-table-controls">
-              <label className="panel-select panel-select-compact">
-                <span>Sort full list</span>
-                <select value={sortMode} onChange={(event) => onSortModeChange(event.target.value)}>
-                  {sortModes.map((mode) => (
-                    <option key={mode} value={mode}>
-                      {mode}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="craft-column-picker">
-                <span className="toolbar-label">Optional columns</span>
-                <div className="chip-group compact-chip-group">
-                  {CRAFT_RESULTS_OPTIONAL_COLUMNS.map((column) => (
-                    <button
-                      key={column.id}
-                      type="button"
-                      className={classNames("chip", "table-option-chip", craftTableColumns[column.id] && "active")}
-                      onClick={() => toggleCraftTableColumn(column.id)}
-                    >
-                      {column.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              Showing all {craftNow?.count ?? 0} craftable recipe row{craftNow?.count === 1 ? "" : "s"} in {sortMode} order.
             </div>
           </div>
-          <CraftResultsTable rows={craftNow?.items ?? []} columnVisibility={craftTableColumns} />
-        </ResultsAccordionCard>
-      ) : null}
+        </div>
+        <div className="results-preview results-preview--craftable">
+          <BestDirectCards
+            rows={craftNow?.items ?? []}
+            emptyMessage="You can't craft anything directly with the current inventory and station filters."
+          />
+        </div>
+      </ResultsAccordionCard>
 
       <ResultsAccordionCard
         title="Almost craftable"

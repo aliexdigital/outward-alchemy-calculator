@@ -6,9 +6,9 @@ export const SORT_MODES = [
   "Smart score",
   "Max crafts",
   "Max total output",
-  "Healing yield",
-  "Stamina yield",
-  "Mana yield",
+  "Best healing",
+  "Best stamina",
+  "Best mana",
   "Sale value",
   "Result A-Z",
 ] as const;

@@ -88,11 +88,11 @@ export function SupportRail({
                 <strong className="snapshot-tile-value">{snapshot?.known_recipes ?? 0}</strong>
               </div>
               <div className="snapshot-tile accent">
-                <span className="snapshot-tile-label">Can make now</span>
+                <span className="snapshot-tile-label">Craftable rows</span>
                 <strong className="snapshot-tile-value">{snapshot?.direct_crafts ?? 0}</strong>
               </div>
               <div className="snapshot-tile">
-                <span className="snapshot-tile-label">Almost ready</span>
+                <span className="snapshot-tile-label">Near rows</span>
                 <strong className="snapshot-tile-value">{snapshot?.near_crafts ?? 0}</strong>
               </div>
             </div>

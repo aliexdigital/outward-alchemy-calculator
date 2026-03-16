@@ -107,6 +107,20 @@ def create_app() -> FastAPI:
     ) -> dict:
         return app.state.service.near_crafts(stations=stations, limit=limit, max_missing_slots=max_missing_slots)
 
+    @app.get("/api/results/recipe-debug")
+    def results_recipe_debug(
+        result: str = Query(...),
+        stations: Optional[List[str]] = Query(default=None),
+        max_missing_slots: int = Query(default=2, ge=1, le=4),
+        planner_depth: int = Query(default=5, ge=1, le=8),
+    ) -> dict:
+        return app.state.service.recipe_visibility_debug(
+            result=result,
+            stations=stations,
+            max_missing_slots=max_missing_slots,
+            planner_depth=planner_depth,
+        )
+
     @app.post("/api/results/planner")
     def results_planner(payload: PlannerRequest) -> dict:
         return app.state.service.planner(payload.target, payload.max_depth, payload.stations)

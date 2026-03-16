@@ -370,9 +370,13 @@ def test_missing_threshold_query_changes_near_results() -> None:
 
     near_one = client.get("/api/results/near?max_missing_slots=1").json()
     near_two = client.get("/api/results/near?max_missing_slots=2").json()
+    near_three = client.get("/api/results/near?max_missing_slots=3").json()
 
     assert near_two["count"] >= near_one["count"]
     assert any(row["result"] == "Cool Potion" for row in near_one["items"])
+    assert not any(row["result"] == "Life Potion" for row in near_one["items"])
+    assert any(row["result"] == "Life Potion" for row in near_two["items"])
+    assert any(row["result"] == "Stoneflesh Elixir" for row in near_three["items"])
 
 
 def test_dashboard_endpoint_returns_shared_panel_payload() -> None:
@@ -509,6 +513,141 @@ def test_live_snapshot_and_best_direct_match_player_useful_outputs_for_sample_in
     assert dashboard["snapshot"]["best_mana"] == "Astral Potion"
     assert direct["items"][0]["result"] == "Astral Potion"
     assert any(row["result"] == "Miner's Omelet" for row in direct["items"][:6])
+
+
+def test_dashboard_best_direct_matches_the_top_smart_score_slice_of_direct_results() -> None:
+    client = make_client()
+
+    client.put(
+        "/api/inventory/replace",
+        json={
+            "items": [
+                {"item": "Raw Meat", "qty": 1},
+                {"item": "Gaberries", "qty": 1},
+                {"item": "Salt", "qty": 2},
+                {"item": "Bird Egg", "qty": 2},
+                {"item": "Common Mushroom", "qty": 1},
+                {"item": "Gravel Beetle", "qty": 1},
+                {"item": "Blood Mushroom", "qty": 1},
+                {"item": "Star Mushroom", "qty": 1},
+                {"item": "Turmmip", "qty": 3},
+                {"item": "Clean Water", "qty": 2},
+            ]
+        },
+    ).raise_for_status()
+
+    dashboard = client.get("/api/results/dashboard?stations=Alchemy+Kit&stations=Cooking+Pot&max_missing_slots=2").json()
+    direct = client.get("/api/results/direct?stations=Alchemy+Kit&stations=Cooking+Pot&sort_mode=Smart%20score&limit=100").json()
+
+    shortlist_limit = dashboard["best_direct"]["shortlist_limit"]
+
+    assert dashboard["best_direct"]["count"] == direct["count"]
+    assert dashboard["best_direct"]["items"] == direct["items"][:shortlist_limit]
+    assert any(row["result"] == "Astral Potion" for row in dashboard["best_direct"]["items"])
+
+
+def test_recipe_debug_reports_consistent_astral_potion_visibility_across_surfaces() -> None:
+    client = make_client()
+
+    client.put(
+        "/api/inventory/replace",
+        json={
+            "items": [
+                {"item": "Star Mushroom", "qty": 1},
+                {"item": "Turmmip", "qty": 1},
+                {"item": "Clean Water", "qty": 1},
+            ]
+        },
+    ).raise_for_status()
+
+    debug = client.get(
+        "/api/results/recipe-debug?result=Astral%20Potion&stations=Alchemy+Kit&max_missing_slots=2&planner_depth=5"
+    ).json()
+    direct = client.get("/api/results/direct?stations=Alchemy+Kit&sort_mode=Smart%20score&limit=50").json()
+    dashboard = client.get("/api/results/dashboard?stations=Alchemy+Kit&max_missing_slots=2").json()
+    planner = client.post(
+        "/api/results/planner",
+        json={"target": "Astral Potion", "max_depth": 5, "stations": ["Alchemy Kit"]},
+    ).json()
+
+    assert debug["craftable_now"] is True
+    assert debug["craftable_panel"] is True
+    assert debug["planner_found"] is True
+    assert debug["smart_score"] is not None
+    assert debug["recipe_database_rows"] >= 1
+    assert debug["craftable_recipe_rows"] >= 1
+    assert debug["evaluated_rows"]
+    assert any(position["sort_mode"] == "Smart score" and position["rank"] == 1 for position in debug["sort_positions"])
+    assert any(row["result"] == "Astral Potion" for row in direct["items"])
+    assert any(row["result"] == "Astral Potion" for row in dashboard["best_direct"]["items"])
+    assert planner["found"] is True
+
+
+def test_recipe_debug_reports_full_craftable_inclusion_and_sort_rank_for_lower_ranked_results() -> None:
+    client = make_client()
+
+    metadata = client.get("/api/metadata").json()
+    all_items = [{"item": item_name, "qty": 3} for item_name in metadata["ingredients"]]
+    client.put("/api/inventory/replace", json={"items": all_items}).raise_for_status()
+
+    debug = client.get(
+        "/api/results/recipe-debug?result=Cooking%20Pot&stations=Manual%20Crafting&stations=Alchemy%20Kit&stations=Campfire&stations=Cooking%20Pot&max_missing_slots=4&planner_depth=5"
+    ).json()
+    direct = client.get(
+        "/api/results/direct?stations=Manual%20Crafting&stations=Alchemy%20Kit&stations=Campfire&stations=Cooking%20Pot&sort_mode=Smart%20score&limit=500"
+    ).json()
+
+    assert debug["craftable_now"] is True
+    assert debug["craftable_panel"] is True
+    assert debug["craftable_sort_reason"].startswith("The best matching craftable row is ranked #")
+    assert any(position["sort_mode"] == "Smart score" and position["rank"] and position["rank"] > 1 for position in debug["sort_positions"])
+    assert any(row["result"] == "Cooking Pot" for row in direct["items"])
+
+
+def test_direct_sorting_changes_order_but_not_full_craftable_inclusion() -> None:
+    client = make_client()
+
+    client.put(
+        "/api/inventory/replace",
+        json={
+            "items": [
+                {"item": "Raw Meat", "qty": 1},
+                {"item": "Gaberries", "qty": 1},
+                {"item": "Salt", "qty": 2},
+                {"item": "Bird Egg", "qty": 2},
+                {"item": "Common Mushroom", "qty": 1},
+                {"item": "Gravel Beetle", "qty": 1},
+                {"item": "Blood Mushroom", "qty": 1},
+                {"item": "Star Mushroom", "qty": 1},
+                {"item": "Turmmip", "qty": 3},
+                {"item": "Clean Water", "qty": 2},
+            ]
+        },
+    ).raise_for_status()
+
+    smart = client.get("/api/results/direct?stations=Alchemy+Kit&stations=Cooking+Pot&sort_mode=Smart%20score&limit=100").json()
+    mana = client.get("/api/results/direct?stations=Alchemy+Kit&stations=Cooking+Pot&sort_mode=Best%20mana&limit=100").json()
+
+    assert smart["count"] == mana["count"]
+    assert {row["result"] for row in smart["items"]} == {row["result"] for row in mana["items"]}
+    assert [row["result"] for row in smart["items"][:5]] != [row["result"] for row in mana["items"][:5]]
+
+
+def test_recipe_debug_shows_near_threshold_changes_for_two_missing_slots() -> None:
+    client = make_client()
+
+    client.post("/api/inventory/items/add", json={"item": "Gravel Beetle", "qty": 1}).raise_for_status()
+
+    debug_one = client.get(
+        "/api/results/recipe-debug?result=Life%20Potion&stations=Alchemy+Kit&max_missing_slots=1&planner_depth=5"
+    ).json()
+    debug_two = client.get(
+        "/api/results/recipe-debug?result=Life%20Potion&stations=Alchemy+Kit&max_missing_slots=2&planner_depth=5"
+    ).json()
+
+    assert debug_one["near_craft"] is False
+    assert debug_two["near_craft"] is True
+    assert "above the current threshold of 1" in debug_one["near_reason"]
 
 
 def test_inventory_can_grow_past_46_unique_entries_and_duplicates_still_aggregate() -> None:

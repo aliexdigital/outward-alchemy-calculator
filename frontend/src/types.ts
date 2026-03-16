@@ -59,6 +59,7 @@ export type DirectResponse = {
   sort_mode: string;
   count: number;
   near_count: number;
+  shortlist_limit?: number;
   items: RecipeResult[];
 };
 
@@ -127,6 +128,48 @@ export type PlannerResponse = {
   lines: string[];
   missing: InventoryItem[];
   remaining_inventory: InventoryItem[];
+};
+
+export type RecipeDebugMatch = {
+  ingredients: string;
+  station: string;
+  max_crafts: number;
+  missing_slots: number;
+  matched_slots: number;
+};
+
+export type RecipeDebugSortPosition = {
+  sort_mode: string;
+  rank: number | null;
+  total: number;
+  primary_column: string;
+  primary_value: number | string | null;
+};
+
+export type RecipeDebugResponse = {
+  result: string;
+  selected_stations: string[];
+  max_missing_slots: number;
+  planner_depth: number;
+  recipe_database_rows: number;
+  evaluated_recipe_rows: number;
+  craftable_recipe_rows: number;
+  near_recipe_rows: number;
+  craftable_now: boolean;
+  craftable_panel: boolean;
+  craftable_panel_reason: string;
+  near_craft: boolean;
+  near_reason: string;
+  smart_score: number | null;
+  craftable_sort_reason: string;
+  sort_positions: RecipeDebugSortPosition[];
+  planner_found: boolean;
+  planner_reason: string;
+  planner_missing: InventoryItem[];
+  matching_recipe: RecipeDebugMatch | null;
+  evaluated_rows: RecipeResult[];
+  craftable_rows: RecipeResult[];
+  near_rows: RecipeResult[];
 };
 
 export type ShoppingListResponse = {

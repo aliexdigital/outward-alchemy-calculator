@@ -78,13 +78,12 @@ def test_direct_result_sections_are_clearly_distinguished() -> None:
     results_source = read_frontend("components/ResultsRail.tsx")
     app_source = read_frontend("App.tsx")
 
-    assert 'title="Best direct options"' in results_source
-    assert 'title="Full craftable list"' in results_source
+    assert 'title="Craftable recipes"' in results_source
     assert 'title="Almost craftable"' in results_source
-    assert results_source.index('title="Best direct options"') < results_source.index('title="Full craftable list"')
-    assert results_source.index('title="Full craftable list"') < results_source.index('title="Almost craftable"')
-    assert 'activeSection === "Craft now"' in results_source
-    assert 'title="Full craftable list"' not in app_source
+    assert results_source.index('title="Craftable recipes"') < results_source.index('title="Almost craftable"')
+    assert 'title="Best direct options"' not in results_source
+    assert 'title="Full craftable list"' not in results_source
+    assert 'if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;' not in app_source
 
 
 def test_near_craft_views_use_missing_summary_without_slots_column() -> None:
@@ -124,9 +123,11 @@ def test_frontend_uses_dashboard_refresh_and_keeps_metadata_static() -> None:
 
     assert app_source.count("api.getMetadata(") == 1
     assert "api.getDashboard(" in app_source
+    assert "api.getDirect(" in app_source
+    assert "api.getNear(" in app_source
     assert "api.getOverview(" not in app_source
     assert "api.getInventory(" not in app_source
-    assert 'if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;' in app_source
+    assert 'if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;' not in app_source
 
 
 def test_bootstrap_does_not_block_the_shell_on_secondary_panel_fetches() -> None:
@@ -148,8 +149,8 @@ def test_inventory_mutations_share_one_refresh_contract_including_imports() -> N
 
     assert "const refreshInventoryDrivenViews = useCallback(async () => {" in app_source
     assert "refreshSharedPanels(selectedStations, nearThreshold)" in app_source
-    assert 'if (activeSection === "Craft now")' in app_source
     assert "refreshCraftNow(selectedStations, sortMode, nearThreshold)" in app_source
+    assert "refreshNearResults(selectedStations, nearThreshold)" in app_source
     assert "if (plannerRequested && planTarget.trim())" in app_source
     assert "refreshes.push(executePlanner())" in app_source
     assert "if (shoppingRequested && parseShoppingTargets(shoppingText).length)" in app_source
@@ -213,9 +214,13 @@ def test_inventory_table_tools_and_headers_use_the_new_layout_contract() -> None
     editor_source = read_frontend("components/InventoryEditor.tsx")
     css = read_frontend("styles/app.css")
 
+    assert "inventory-manager-shell" in editor_source
+    assert "inventory-manager-section" in editor_source
     assert 'className="inventory-summary-head"' in editor_source
     assert "summary-action-button" in editor_source
     assert 'className="inventory-table-tools"' in editor_source
+    assert ".inventory-manager-shell {" in css
+    assert ".inventory-manager-section {" in css
     assert ".inventory-summary-head {" in css
     assert ".inventory-table-tools {" in css
     assert ".table-utility-button {" in css
@@ -251,23 +256,22 @@ def test_pills_and_buttons_keep_text_on_one_line_in_css() -> None:
     assert ".near-pill {" in css or ".near-pill" in css
 
 
-def test_craft_now_main_view_contains_the_full_craftable_table_and_sort_control() -> None:
+def test_craft_now_main_view_contains_the_full_craftable_card_panel_and_sort_control() -> None:
     results_source = read_frontend("components/ResultsRail.tsx")
     views_source = read_frontend("components/data-views.tsx")
 
-    assert "<CraftResultsTable" in results_source
-    assert 'title="Full craftable list"' in results_source
-    assert '<span>Sort full list</span>' in results_source
+    assert "<CraftResultsTable" not in results_source
+    assert "<BestDirectCards" in results_source
+    assert 'title="Craftable recipes"' in results_source
+    assert '<span>Sort craftable recipes</span>' in results_source
     assert 'className="result-panel-stack"' in results_source
-    assert "<th className=\"cell-result\">Result</th>" in views_source
-    assert "<th className=\"cell-recipe\">Recipe</th>" in views_source
-    assert "<th className=\"cell-buffs\">Buffs</th>" in views_source
-    assert "<th className=\"cell-score\">Smart score</th>" in views_source
-    assert "<th className=\"cell-station\">Station</th>" in views_source
-    assert "Optional columns" in results_source
-    assert "Crafts possible" in results_source
-    assert "Total made" in results_source
-    assert "Per craft" in results_source
+    assert 'className="craftable-card-toolbar"' in results_source
+    assert 'className="results-preview results-preview--craftable"' in results_source
+    assert "Showing all" in results_source
+    assert "Sorting changes order, not inclusion." in results_source
+    assert 'className="result-card-topline"' in views_source
+    assert 'className="result-card-meta"' in views_source
+    assert 'className="result-card-detail-grid"' in views_source
 
 
 def test_long_result_lists_use_internal_scroll_containers_without_changing_column_contract() -> None:
@@ -279,8 +283,9 @@ def test_long_result_lists_use_internal_scroll_containers_without_changing_colum
     assert ".results-preview {" in css
     assert "max-height: clamp(16rem, 33vh, 22rem);" in css
     assert "overflow-y: auto;" in css
-    assert ".results-rail .craft-table-shell {" in css
-    assert "min-height: 0;" in css
+    assert ".results-preview--craftable {" in css
+    assert "max-height: clamp(24rem, 62vh, 42rem);" in css
+    assert ".right-column .results-preview:not(.results-preview--craftable)" in css
     assert "display: grid;" not in css[css.index(".utility-rail__scroll {"):css.index(".main-column,")]
     assert "grid-template-columns:" in css
     assert "clamp(250px, 18vw, 290px)" in css
@@ -341,8 +346,8 @@ def test_right_rail_cards_are_collapsible_and_can_stay_open_independently() -> N
     assert 'className="result-card-pill"' in views_source
     assert 'className="result-card-detail-grid"' in views_source
     assert 'className="near-card-topline"' in views_source
-    assert ".craft-table-controls {" in css
-    assert ".table-option-chip {" in css
+    assert ".craftable-card-toolbar {" in css
+    assert ".results-preview--craftable {" in css
 
 
 def test_inventory_sync_card_prioritizes_outward_sync_and_keeps_manual_upload_as_fallback() -> None:
@@ -379,6 +384,26 @@ def test_planner_view_surfaces_route_status_steps_and_honest_inventory_labels() 
     assert ".planner-summary-grid {" in css
     assert ".planner-step-list {" in css
     assert ".planner-step-chip.is-missing {" in css
+
+
+def test_recipe_database_includes_recipe_visibility_debug_and_calls_the_debug_endpoint() -> None:
+    app_source = read_frontend("App.tsx")
+    api_source = read_frontend("api.ts")
+    css = read_frontend("styles/app.css")
+
+    assert "Recipe visibility debug" in app_source
+    assert "Uses the shared station filters" in app_source
+    assert "Check recipe" in app_source
+    assert "setDebugRequested(true);" in app_source
+    assert "executeRecipeDebug" in app_source
+    assert "api.getRecipeDebug(" in app_source
+    assert "getRecipeDebug: (result: string, stations: string[], maxMissingSlots: number, plannerDepth: number) =>" in api_source
+    assert "Sort ranks" in app_source
+    assert "Matching recipe rows" in app_source
+    assert ".recipe-debug-panel .panel-body {" in css
+    assert ".debug-grid {" in css
+    assert ".debug-sort-list" in css
+    assert ".debug-row-list" in css
 
 
 def test_import_shortcut_surfaces_success_status_and_json_error_details() -> None:

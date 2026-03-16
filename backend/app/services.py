@@ -17,6 +17,18 @@ from src import inventory_ops
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "src" / "data"
 OUTWARD_SYNC_INVENTORY_PATH = Path(r"C:\Users\Alexandra\Documents\OutwardCraftSync\current_inventory.csv")
+BEST_DIRECT_SHORTLIST_LIMIT = 8
+NEAR_RESULTS_PREVIEW_LIMIT = 30
+CRAFTABLE_DEBUG_SORT_MODES = [
+    ("Smart score", "smart_score"),
+    ("Best healing", "healing_total"),
+    ("Best stamina", "stamina_total"),
+    ("Best mana", "mana_total"),
+    ("Max crafts", "max_crafts"),
+    ("Max total output", "max_total_output"),
+    ("Sale value", "sale_value_total"),
+    ("Result A-Z", "result"),
+]
 
 
 def _load_recipes() -> pd.DataFrame:
@@ -78,6 +90,14 @@ class CalculatorData:
     item_catalog: List[str]
     catalog_by_category: Dict[str, List[str]]
     station_options: List[str]
+
+
+@dataclass(frozen=True)
+class RecipeSurfaceFrames:
+    filtered: pd.DataFrame
+    evaluated: pd.DataFrame
+    craftable: pd.DataFrame
+    near: pd.DataFrame
 
 
 def load_calculator_data() -> CalculatorData:
@@ -142,6 +162,9 @@ def recipe_sort_options() -> Dict[str, List[str]]:
         "Smart score": ["smart_score", "max_crafts", "result"],
         "Max crafts": ["max_crafts", "max_total_output", "result"],
         "Max total output": ["max_total_output", "max_crafts", "result"],
+        "Best healing": ["healing_total", "max_total_output", "result"],
+        "Best stamina": ["stamina_total", "max_total_output", "result"],
+        "Best mana": ["mana_total", "max_total_output", "result"],
         "Healing yield": ["healing_total", "max_total_output", "result"],
         "Stamina yield": ["stamina_total", "max_total_output", "result"],
         "Mana yield": ["mana_total", "max_total_output", "result"],
@@ -246,21 +269,71 @@ class CalculatorService:
             return self.data.recipes_df.iloc[0:0].copy()
         return self.data.recipes_df[self.data.recipes_df["station"].isin(station_filter)].copy()
 
+    def recipe_surface_frames(
+        self,
+        stations: Optional[List[str]] = None,
+        max_missing_slots: int = 2,
+    ) -> RecipeSurfaceFrames:
+        filtered = self.filtered_recipes(stations)
+        inventory = self.get_inventory()
+        evaluated = core.build_direct_results(filtered, inventory, self.data.groups, self.data.item_metadata)
+        craftable = evaluated[evaluated["max_crafts"] > 0].copy()
+        near = evaluated[
+            (evaluated["max_crafts"] == 0)
+            & (evaluated["missing_slots"] <= max_missing_slots)
+            & (evaluated["matched_slots"] > 0)
+        ].copy()
+        return RecipeSurfaceFrames(
+            filtered=filtered,
+            evaluated=evaluated,
+            craftable=craftable,
+            near=near,
+        )
+
+    def _ordered_near_results(self, near: pd.DataFrame) -> pd.DataFrame:
+        if near.empty:
+            return near.copy()
+        return near.sort_values(["missing_slots", "matched_slots", "result"], ascending=[True, False, True]).reset_index(drop=True)
+
+    def _matching_result_rows(self, frame: pd.DataFrame, result: str) -> pd.DataFrame:
+        if frame.empty:
+            return frame.copy()
+        result_key = core.key(result)
+        return frame[frame["result"].map(core.key) == result_key].copy()
+
+    def _craftable_sort_positions(self, craftable: pd.DataFrame, result: str) -> List[dict]:
+        positions: List[dict] = []
+        total = int(len(craftable))
+        for sort_mode, primary_column in CRAFTABLE_DEBUG_SORT_MODES:
+            ordered = order_craftable_results(craftable, sort_mode) if not craftable.empty else craftable.copy()
+            matches = self._matching_result_rows(ordered.reset_index(drop=True), result)
+            best_row = matches.iloc[0] if not matches.empty else None
+            rank = int(matches.index[0]) + 1 if not matches.empty else None
+            primary_value = None if best_row is None else best_row.get(primary_column)
+            if isinstance(primary_value, float):
+                primary_value = float(primary_value)
+            elif isinstance(primary_value, int):
+                primary_value = int(primary_value)
+            elif primary_value is not None:
+                primary_value = str(primary_value)
+            positions.append(
+                {
+                    "sort_mode": sort_mode,
+                    "rank": rank,
+                    "total": total,
+                    "primary_column": primary_column,
+                    "primary_value": primary_value,
+                }
+            )
+        return positions
+
     def result_frames(
         self,
         stations: Optional[List[str]] = None,
         max_missing_slots: int = 2,
     ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-        filtered = self.filtered_recipes(stations)
-        inventory = self.get_inventory()
-        results = core.build_direct_results(filtered, inventory, self.data.groups, self.data.item_metadata)
-        craftable = results[results["max_crafts"] > 0].copy()
-        near = results[
-            (results["max_crafts"] == 0)
-            & (results["missing_slots"] <= max_missing_slots)
-            & (results["matched_slots"] > 0)
-        ].copy()
-        return filtered, craftable, near
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
+        return frames.filtered, frames.craftable, frames.near
 
     def _snapshot_effect_tokens(self, effects: str) -> List[str]:
         return [core.key(effect) for effect in str(effects or "").split(";") if core.normalize(effect)]
@@ -360,32 +433,33 @@ class CalculatorService:
 
     def overview(self, stations: Optional[List[str]] = None, max_missing_slots: int = 2) -> dict:
         inventory = self.get_inventory()
-        filtered, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
         inventory_df = inventory_ops.inventory_table_df(inventory)
         return {
             "inventory": self.get_inventory_response(),
             "inventory_table": _df_records(inventory_df),
-            "snapshot": self._snapshot_payload(filtered, craftable, near, inventory),
+            "snapshot": self._snapshot_payload(frames.filtered, frames.craftable, frames.near, inventory),
         }
 
     def dashboard(self, stations: Optional[List[str]] = None, max_missing_slots: int = 2) -> dict:
         inventory = self.get_inventory()
-        filtered, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
-        best_direct = order_craftable_results(craftable, "Smart score") if not craftable.empty else craftable
-        near_ordered = near.sort_values(["missing_slots", "matched_slots", "result"], ascending=[True, False, True]) if not near.empty else near
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
+        best_direct = order_craftable_results(frames.craftable, "Smart score") if not frames.craftable.empty else frames.craftable
+        near_ordered = self._ordered_near_results(frames.near)
         return {
             "inventory": self.get_inventory_response(),
-            "snapshot": self._snapshot_payload(filtered, craftable, near, inventory),
+            "snapshot": self._snapshot_payload(frames.filtered, frames.craftable, frames.near, inventory),
             "best_direct": {
                 "sort_mode": "Smart score",
-                "count": len(craftable),
-                "near_count": len(near),
-                "items": _df_records(best_direct.head(8)),
+                "count": len(frames.craftable),
+                "near_count": len(frames.near),
+                "shortlist_limit": BEST_DIRECT_SHORTLIST_LIMIT,
+                "items": _df_records(best_direct.head(BEST_DIRECT_SHORTLIST_LIMIT)),
             },
             "near": {
-                "count": len(near),
-                "known_recipes": len(filtered),
-                "items": _df_records(near_ordered.head(30)),
+                "count": len(frames.near),
+                "known_recipes": len(frames.filtered),
+                "items": _df_records(near_ordered.head(NEAR_RESULTS_PREVIEW_LIMIT)),
             },
         }
 
@@ -396,14 +470,14 @@ class CalculatorService:
         limit: Optional[int] = None,
         max_missing_slots: int = 2,
     ) -> dict:
-        _, craftable, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
-        ordered = order_craftable_results(craftable, sort_mode) if not craftable.empty else craftable
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
+        ordered = order_craftable_results(frames.craftable, sort_mode) if not frames.craftable.empty else frames.craftable
         if limit is not None:
             ordered = ordered.head(limit)
         return {
             "sort_mode": sort_mode,
-            "count": len(craftable),
-            "near_count": len(near),
+            "count": len(frames.craftable),
+            "near_count": len(frames.near),
             "items": _df_records(ordered),
         }
 
@@ -413,14 +487,113 @@ class CalculatorService:
         limit: Optional[int] = None,
         max_missing_slots: int = 2,
     ) -> dict:
-        filtered, _, near = self.result_frames(stations, max_missing_slots=max_missing_slots)
-        ordered = near.sort_values(["missing_slots", "matched_slots", "result"], ascending=[True, False, True]) if not near.empty else near
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
+        ordered = self._ordered_near_results(frames.near)
         if limit is not None:
             ordered = ordered.head(limit)
         return {
-            "count": len(near),
-            "known_recipes": len(filtered),
+            "count": len(frames.near),
+            "known_recipes": len(frames.filtered),
             "items": _df_records(ordered),
+        }
+
+    def recipe_visibility_debug(
+        self,
+        result: str,
+        stations: Optional[List[str]] = None,
+        max_missing_slots: int = 2,
+        planner_depth: int = 5,
+    ) -> dict:
+        result_name = core.normalize(result)
+        frames = self.recipe_surface_frames(stations, max_missing_slots=max_missing_slots)
+        smart_ranked = order_craftable_results(frames.craftable, "Smart score") if not frames.craftable.empty else frames.craftable.copy()
+        near_ranked = self._ordered_near_results(frames.near)
+        evaluated_ranked = frames.evaluated.reset_index(drop=True) if not frames.evaluated.empty else frames.evaluated.copy()
+
+        filtered_matches = self._matching_result_rows(frames.filtered, result_name)
+        evaluated_matches = self._matching_result_rows(evaluated_ranked, result_name)
+        craftable_matches = self._matching_result_rows(smart_ranked, result_name)
+        near_matches = self._matching_result_rows(near_ranked, result_name)
+
+        planner = self.planner(result_name, planner_depth, stations)
+        best_smart_score = float(craftable_matches.iloc[0]["smart_score"]) if not craftable_matches.empty else None
+        best_matching_row = craftable_matches.iloc[0] if not craftable_matches.empty else (evaluated_matches.iloc[0] if not evaluated_matches.empty else None)
+        sort_positions = self._craftable_sort_positions(frames.craftable, result_name)
+
+        if filtered_matches.empty:
+            craftable_panel_reason = "No recipe rows for this result are available under the current station filters."
+        elif craftable_matches.empty:
+            craftable_panel_reason = "This result has recipe rows, but none of them are craftable now."
+        else:
+            craftable_panel_reason = (
+                "At least one matching recipe row is craftable now, so it appears in the main craftable recipes panel. "
+                "Sorting only changes order."
+            )
+
+        if filtered_matches.empty:
+            near_reason = "No recipe rows for this result are available under the current station filters."
+        elif not craftable_matches.empty:
+            near_reason = "This result is already craftable now, so it is intentionally excluded from Almost craftable."
+        elif not near_matches.empty:
+            near_reason = (
+                f"The closest matching row is inside the near-craft threshold at {int(near_matches.iloc[0]['missing_slots'])} missing slot(s)."
+            )
+        elif evaluated_matches.empty:
+            near_reason = "No evaluated recipe rows were available for this result."
+        elif int(evaluated_matches["matched_slots"].max()) <= 0:
+            near_reason = "No ingredient slots are currently satisfied, so it is intentionally excluded from Almost craftable."
+        else:
+            closest_missing = int(evaluated_matches["missing_slots"].min())
+            near_reason = (
+                f"The closest matching row still needs {closest_missing} missing slot(s), which is above the current threshold of {max_missing_slots}."
+            )
+
+        if craftable_matches.empty:
+            craftable_sort_reason = "No craftable row is available yet, so this result has no craftable ranking."
+        else:
+            best_smart_rank = next((entry["rank"] for entry in sort_positions if entry["sort_mode"] == "Smart score"), None)
+            craftable_sort_reason = (
+                f"The best matching craftable row is ranked #{best_smart_rank} by Smart score. "
+                "Other sort modes can move it, but they do not remove it from the craftable panel."
+            )
+
+        matching_recipe = (
+            {
+                "ingredients": str(best_matching_row["ingredients"]),
+                "station": str(best_matching_row["station"]),
+                "max_crafts": int(best_matching_row.get("max_crafts", 0) or 0),
+                "missing_slots": int(best_matching_row.get("missing_slots", 0) or 0),
+                "matched_slots": int(best_matching_row.get("matched_slots", 0) or 0),
+            }
+            if best_matching_row is not None
+            else None
+        )
+
+        selected_stations = self._normalized_stations(stations)
+        return {
+            "result": result_name,
+            "selected_stations": selected_stations if selected_stations is not None else list(self.data.station_options),
+            "max_missing_slots": int(max_missing_slots),
+            "planner_depth": int(planner_depth),
+            "recipe_database_rows": int(len(filtered_matches)),
+            "evaluated_recipe_rows": int(len(evaluated_matches)),
+            "craftable_recipe_rows": int(len(craftable_matches)),
+            "near_recipe_rows": int(len(near_matches)),
+            "craftable_now": not craftable_matches.empty,
+            "craftable_panel": not craftable_matches.empty,
+            "craftable_panel_reason": craftable_panel_reason,
+            "near_craft": not near_matches.empty,
+            "near_reason": near_reason,
+            "smart_score": best_smart_score,
+            "craftable_sort_reason": craftable_sort_reason,
+            "sort_positions": sort_positions,
+            "planner_found": bool(planner["found"]),
+            "planner_reason": planner["explanation"],
+            "planner_missing": planner["missing"],
+            "matching_recipe": matching_recipe,
+            "evaluated_rows": _df_records(evaluated_matches.head(8)),
+            "craftable_rows": _df_records(craftable_matches.head(5)),
+            "near_rows": _df_records(near_matches.head(5)),
         }
 
     def planner(self, target: str, max_depth: int, stations: Optional[List[str]] = None) -> dict:

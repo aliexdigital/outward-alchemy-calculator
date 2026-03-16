@@ -33,12 +33,15 @@ import {
   ItemStatsTable,
   NearCraftTable,
 } from "./components/data-views";
-import { Panel, classNames } from "./components/ui";
+import { Panel, StatCard, classNames } from "./components/ui";
 import type {
   DashboardResponse,
+  DirectResponse,
   InventoryResponse,
   MetadataResponse,
+  NearResponse,
   PlannerResponse,
+  RecipeDebugResponse,
   ShoppingListResponse,
 } from "./types";
 import type { NavItem, RailSectionId } from "./lib/app-config";
@@ -122,14 +125,22 @@ function plannerStepLabel(kind: PlannerStepKind): string {
   }
 }
 
+function formatDebugMetric(value: number | string | null | undefined): string {
+  if (value == null) return "None";
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? String(value) : value.toFixed(1);
+  }
+  return value;
+}
+
 export default function App() {
   const [metadata, setMetadata] = useState<MetadataResponse | null>(null);
   const [inventory, setInventory] = useState<InventoryResponse | null>(null);
   const [snapshot, setSnapshot] = useState<DashboardResponse["snapshot"] | null>(null);
-  const [bestDirect, setBestDirect] = useState<DashboardResponse["best_direct"] | null>(null);
-  const [craftNow, setCraftNow] = useState<DashboardResponse["best_direct"] | null>(null);
-  const [near, setNear] = useState<DashboardResponse["near"] | null>(null);
+  const [craftNow, setCraftNow] = useState<DirectResponse | null>(null);
+  const [near, setNear] = useState<NearResponse | null>(null);
   const [plannerResult, setPlannerResult] = useState<PlannerResponse | null>(null);
+  const [recipeDebugResult, setRecipeDebugResult] = useState<RecipeDebugResponse | null>(null);
   const [shoppingResult, setShoppingResult] = useState<ShoppingListResponse | null>(null);
   const [activeSection, setActiveSection] = useState<NavItem>("Craft now");
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -148,9 +159,11 @@ export default function App() {
   const [showOwnedOnly, setShowOwnedOnly] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [planTarget, setPlanTarget] = useState("");
+  const [debugRecipe, setDebugRecipe] = useState("");
   const [shoppingText, setShoppingText] = useState("Life Potion,3\nWarm Potion,2");
   const [draftQuantities, setDraftQuantities] = useState<Record<string, string>>({});
   const [plannerRequested, setPlannerRequested] = useState(false);
+  const [debugRequested, setDebugRequested] = useState(false);
   const [shoppingRequested, setShoppingRequested] = useState(false);
   const [databaseSearch, setDatabaseSearch] = useState("");
   const [databaseStations, setDatabaseStations] = useState<string[]>([]);
@@ -168,8 +181,6 @@ export default function App() {
     startTransition(() => {
       setInventory(dashboardData.inventory);
       setSnapshot(dashboardData.snapshot);
-      setBestDirect(dashboardData.best_direct);
-      setNear(dashboardData.near);
     });
   }, []);
 
@@ -185,6 +196,13 @@ export default function App() {
     const craftNowData = await api.getDirect(currentSortMode, stations, undefined, currentNearThreshold);
     startTransition(() => {
       setCraftNow(craftNowData);
+    });
+  }, []);
+
+  const refreshNearResults = useCallback(async (stations: string[], currentNearThreshold: number) => {
+    const nearData = await api.getNear(stations, undefined, currentNearThreshold);
+    startTransition(() => {
+      setNear(nearData);
     });
   }, []);
 
@@ -207,6 +225,7 @@ export default function App() {
         setDatabaseStations(defaults.stations);
         setDatabaseCategories(defaults.recipeCategories);
         setPlanTarget(defaults.recipeTargets[0] ?? "");
+        setDebugRecipe(meta.recipes.some((recipe) => recipe.result === "Astral Potion") ? "Astral Potion" : defaults.recipeTargets[0] ?? "");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load app data.");
       } finally {
@@ -226,11 +245,18 @@ export default function App() {
   }, [hasBootstrapped, metadata, nearThreshold, refreshSharedPanels, selectedStations]);
 
   useEffect(() => {
-    if (!hasBootstrapped || !metadata || activeSection !== "Craft now") return;
+    if (!hasBootstrapped || !metadata) return;
     void refreshCraftNow(selectedStations, sortMode, nearThreshold).catch((err) => {
       setError(err instanceof Error ? err.message : "Failed to refresh the craftable list.");
     });
-  }, [activeSection, hasBootstrapped, metadata, nearThreshold, refreshCraftNow, selectedStations, sortMode]);
+  }, [hasBootstrapped, metadata, nearThreshold, refreshCraftNow, selectedStations, sortMode]);
+
+  useEffect(() => {
+    if (!hasBootstrapped || !metadata) return;
+    void refreshNearResults(selectedStations, nearThreshold).catch((err) => {
+      setError(err instanceof Error ? err.message : "Failed to refresh the near-craft list.");
+    });
+  }, [hasBootstrapped, metadata, nearThreshold, refreshNearResults, selectedStations]);
 
   const inventoryMap = useMemo(() => {
     return buildInventoryMap(inventory?.items);
@@ -297,6 +323,17 @@ export default function App() {
     }
   }, [planTarget, plannerDepth, selectedStations]);
 
+  const executeRecipeDebug = useCallback(async () => {
+    if (!debugRecipe.trim()) return;
+    try {
+      setError(null);
+      const result = await api.getRecipeDebug(debugRecipe, selectedStations, nearThreshold, plannerDepth);
+      setRecipeDebugResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Recipe visibility debug failed.");
+    }
+  }, [debugRecipe, nearThreshold, plannerDepth, selectedStations]);
+
   const executeShoppingList = useCallback(async () => {
     try {
       setError(null);
@@ -313,12 +350,16 @@ export default function App() {
   }, [plannerDepth, selectedStations, shoppingText]);
 
   const refreshInventoryDrivenViews = useCallback(async () => {
-    const refreshes: Promise<unknown>[] = [refreshSharedPanels(selectedStations, nearThreshold)];
-    if (activeSection === "Craft now") {
-      refreshes.push(refreshCraftNow(selectedStations, sortMode, nearThreshold));
-    }
+    const refreshes: Promise<unknown>[] = [
+      refreshSharedPanels(selectedStations, nearThreshold),
+      refreshCraftNow(selectedStations, sortMode, nearThreshold),
+      refreshNearResults(selectedStations, nearThreshold),
+    ];
     if (plannerRequested && planTarget.trim()) {
       refreshes.push(executePlanner());
+    }
+    if (debugRequested && debugRecipe.trim()) {
+      refreshes.push(executeRecipeDebug());
     }
     if (shoppingRequested && parseShoppingTargets(shoppingText).length) {
       refreshes.push(executeShoppingList());
@@ -329,13 +370,16 @@ export default function App() {
       throw failedRefresh.reason;
     }
   }, [
-    activeSection,
+    debugRecipe,
+    debugRequested,
     executePlanner,
+    executeRecipeDebug,
     executeShoppingList,
     nearThreshold,
     planTarget,
     plannerRequested,
     refreshCraftNow,
+    refreshNearResults,
     refreshSharedPanels,
     selectedStations,
     shoppingText,
@@ -347,6 +391,11 @@ export default function App() {
     if (!plannerRequested) return;
     void executePlanner();
   }, [executePlanner, plannerRequested]);
+
+  useEffect(() => {
+    if (!debugRequested) return;
+    void executeRecipeDebug();
+  }, [debugRequested, executeRecipeDebug]);
 
   useEffect(() => {
     if (!shoppingRequested) return;
@@ -368,6 +417,7 @@ export default function App() {
         startTransition(() => {
           setInventory(nextInventory);
           if (plannerRequested) setPlannerResult(null);
+          if (debugRequested) setRecipeDebugResult(null);
           if (shoppingRequested) setShoppingResult(null);
         });
         await refreshInventoryDrivenViews();
@@ -381,7 +431,7 @@ export default function App() {
         return result;
       }
     },
-    [plannerRequested, refreshInventoryDrivenViews, shoppingRequested],
+    [debugRequested, plannerRequested, refreshInventoryDrivenViews, shoppingRequested],
   );
 
   const handleQuickAdd = async (event: FormEvent) => {
@@ -833,6 +883,166 @@ export default function App() {
                 <div className="info-strip">
                   Recipe matches: {filteredDatabaseRecipes.length} of {metadata?.recipe_count ?? 0}.
                 </div>
+                <Panel
+                  title="Recipe visibility debug"
+                  description="Check how one result is classified across the craftable, near, and planner logic."
+                  className="sub-panel recipe-debug-panel"
+                >
+                  <div className="view-stack">
+                    <div className="inline-actions view-toolbar">
+                      <label className="field grow">
+                        <span>Result to inspect</span>
+                        <input
+                          list="recipe-debug-options"
+                          value={debugRecipe}
+                          onChange={(event) => {
+                            setDebugRecipe(event.target.value);
+                            setDebugRequested(false);
+                            setRecipeDebugResult(null);
+                          }}
+                          placeholder="Search for a recipe result..."
+                        />
+                        <datalist id="recipe-debug-options">
+                          {recipeTargets.map((target) => (
+                            <option key={target} value={target} />
+                          ))}
+                        </datalist>
+                      </label>
+                      <button
+                        type="button"
+                        className="button subtle"
+                        onClick={() => {
+                          setDebugRequested(true);
+                          void executeRecipeDebug();
+                        }}
+                      >
+                        Check recipe
+                      </button>
+                    </div>
+                    <div className="info-strip">
+                      Uses the shared station filters, near threshold, and planner depth from the left rail. {stationFilterNote}. Near
+                      threshold: {nearThreshold}. Planner depth: {plannerDepth}.
+                    </div>
+                    {recipeDebugResult ? (
+                      <>
+                        <div className="stat-grid two-up">
+                          <StatCard
+                            label="Recipe rows"
+                            value={recipeDebugResult.recipe_database_rows}
+                            detail="Matching recipe rows under the current station filters"
+                          />
+                          <StatCard
+                            label="Evaluated rows"
+                            value={recipeDebugResult.evaluated_recipe_rows}
+                            detail="Matching rows checked against the live inventory"
+                          />
+                          <StatCard
+                            label="Craftable now"
+                            value={recipeDebugResult.craftable_now ? "Yes" : "No"}
+                            detail={recipeDebugResult.craftable_panel_reason}
+                          />
+                          <StatCard
+                            label="Craftable panel"
+                            value={recipeDebugResult.craftable_panel ? "Included" : "Excluded"}
+                            detail={recipeDebugResult.craftable_panel_reason}
+                          />
+                          <StatCard
+                            label="Craftable rows"
+                            value={recipeDebugResult.craftable_recipe_rows}
+                            detail="Matching rows that are craftable right now"
+                          />
+                          <StatCard
+                            label="Near craft"
+                            value={recipeDebugResult.near_craft ? "Included" : "Excluded"}
+                            detail={recipeDebugResult.near_reason}
+                          />
+                          <StatCard
+                            label="Near rows"
+                            value={recipeDebugResult.near_recipe_rows}
+                            detail="Matching rows inside the current near-craft threshold"
+                          />
+                          <StatCard
+                            label="Planner target"
+                            value={recipeDebugResult.planner_found ? "Found" : "Not found"}
+                            detail={recipeDebugResult.planner_reason}
+                          />
+                          <StatCard
+                            label="Smart score"
+                            value={recipeDebugResult.smart_score != null ? recipeDebugResult.smart_score.toFixed(1) : "None"}
+                            detail={
+                              recipeDebugResult.matching_recipe
+                                ? `${recipeDebugResult.matching_recipe.station} | ${recipeDebugResult.matching_recipe.ingredients}`
+                                : "No matching recipe row is currently scored."
+                            }
+                          />
+                        </div>
+                        <div className="info-strip">{recipeDebugResult.craftable_sort_reason}</div>
+                        <div className="debug-grid">
+                          <section className="debug-section">
+                            <div className="debug-section-head">
+                              <strong>Sort ranks</strong>
+                              <span>Every craftable sort reorders the same included set.</span>
+                            </div>
+                            <div className="debug-sort-list">
+                              {recipeDebugResult.sort_positions.map((position) => (
+                                <div key={position.sort_mode} className="debug-sort-row">
+                                  <div className="debug-sort-copy">
+                                    <strong>{position.sort_mode}</strong>
+                                    <span>
+                                      {position.rank ? `Rank #${position.rank} of ${position.total}` : "Not craftable in this sort yet"}
+                                    </span>
+                                  </div>
+                                  <span className="debug-sort-value">{formatDebugMetric(position.primary_value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                          <section className="debug-section">
+                            <div className="debug-section-head">
+                              <strong>Matching recipe rows</strong>
+                              <span>Useful when the same result has more than one recipe row.</span>
+                            </div>
+                            <div className="debug-row-list">
+                              {recipeDebugResult.evaluated_rows.length ? (
+                                recipeDebugResult.evaluated_rows.map((row) => (
+                                  <article key={`${row.result}-${row.station}-${row.ingredients}`} className="debug-row-card">
+                                    <div className="debug-row-head">
+                                      <strong>{row.station}</strong>
+                                      <span>{row.max_crafts > 0 ? "Craftable now" : `${row.missing_slots} slot${row.missing_slots === 1 ? "" : "s"} missing`}</span>
+                                    </div>
+                                    <div className="debug-row-detail">
+                                      <span>Recipe</span>
+                                      <strong>{row.ingredient_list.join(", ") || row.ingredients}</strong>
+                                    </div>
+                                    <div className="debug-row-meta">
+                                      <span>Matched {row.matched_slots}</span>
+                                      <span>Missing {row.missing_slots}</span>
+                                      <span>Crafts {row.max_crafts}</span>
+                                      <span>Smart {formatDebugMetric(row.smart_score)}</span>
+                                    </div>
+                                  </article>
+                                ))
+                              ) : (
+                                <div className="empty-state">No matching recipe rows are available under the current station filters.</div>
+                              )}
+                            </div>
+                          </section>
+                        </div>
+                        {recipeDebugResult.planner_missing.length ? (
+                          <InventoryList
+                            title="Planner still needs"
+                            items={recipeDebugResult.planner_missing}
+                            emptyMessage="The planner has everything it needs."
+                          />
+                        ) : null}
+                      </>
+                    ) : (
+                      <div className="empty-state">
+                        Pick a result and run the debug check to see why it is included or excluded across the main recipe views.
+                      </div>
+                    )}
+                  </div>
+                </Panel>
                 <DatabaseTable rows={filteredDatabaseRecipes} />
                 <div className="database-columns">
                   <Panel title="Ingredient groups" description="Canonical grouped-ingredient slots used by the recipe logic." className="sub-panel">
@@ -848,8 +1058,6 @@ export default function App() {
         </section>
 
         <ResultsRail
-          activeSection={activeSection}
-          bestDirect={bestDirect}
           craftNow={craftNow}
           near={near}
           sortMode={sortMode}
