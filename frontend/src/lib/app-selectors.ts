@@ -24,14 +24,46 @@ export function buildCatalogRows(
   inventoryMap: Map<string, number>,
   itemStatsMap: Map<string, MetadataResponse["item_stats"][number]>,
 ): CatalogRow[] {
-  return (categories ?? []).flatMap((category) =>
-    category.items.map((item) => ({
-      item,
-      category: category.name,
-      qty: inventoryMap.get(item) ?? 0,
-      effects: itemStatsMap.get(item)?.effects ?? "",
-    })),
+  const categorizedItems = new Set<string>();
+  const categoryRows = (categories ?? []).flatMap((category) =>
+    category.items.map((item) => {
+      categorizedItems.add(item);
+      return {
+        item,
+        category: category.name,
+        qty: inventoryMap.get(item) ?? 0,
+        effects: itemStatsMap.get(item)?.effects ?? "",
+      };
+    }),
   );
+
+  const uncategorizedOwnedRows = [...inventoryMap.entries()]
+    .filter(([item, qty]) => qty > 0 && !categorizedItems.has(item))
+    .map(([item, qty]) => ({
+      item,
+      category: itemStatsMap.get(item)?.category || "Other",
+      qty,
+      effects: itemStatsMap.get(item)?.effects ?? "",
+    }))
+    .sort((left, right) => left.item.localeCompare(right.item));
+
+  return [...categoryRows, ...uncategorizedOwnedRows];
+}
+
+export function buildInventoryCategoryGroups(
+  categories: MetadataResponse["categories"] | undefined,
+  rows: CatalogRow[],
+): MetadataResponse["categories"] {
+  const knownCategories = new Set((categories ?? []).map((category) => category.name));
+  const fallbackGroups = Array.from(new Set(rows.map((row) => row.category)))
+    .filter((category) => !knownCategories.has(category))
+    .sort((left, right) => left.localeCompare(right))
+    .map((category) => ({
+      name: category,
+      items: rows.filter((row) => row.category === category).map((row) => row.item),
+    }));
+
+  return [...(categories ?? []), ...fallbackGroups];
 }
 
 export function filterCatalogRows(
